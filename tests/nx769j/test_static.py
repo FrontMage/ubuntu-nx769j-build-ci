@@ -61,6 +61,14 @@ def main():
         bool(re.search(r"KERNEL_COMMIT:-[0-9a-f]{40}\}", kernel_script)),
     )
     check(
+        "perf avoids runner-version-locked libraries",
+        "NO_LIBPYTHON=1" in kernel_script and "NO_LIBLLVM=1" in kernel_script,
+    )
+    check(
+        "rootfs installs perf runtime libraries",
+        "libtraceevent-dev" in rootfs_script and "libelf-dev" in rootfs_script,
+    )
+    check(
         "no boot image is produced",
         "boot.img" not in kernel_script and "mkbootimg" not in kernel_script,
     )

@@ -75,7 +75,7 @@ HARDWARE_VERIFICATION=not_performed
 EOF
 
 "$repo_dir/scripts/nx769j/prepare-y700-rootfs.sh" "$upstream"
-packages='systemd systemd-sysv dbus sudo locales tzdata ca-certificates gnupg curl wget network-manager openssh-server nano vim rsync kmod initramfs-tools build-essential clang lld cmake ninja-build git pkg-config python3 gdb libbabeltrace-dev libcap-dev libelf-dev libdw-dev liblzma-dev libslang2-dev libunwind-dev libfmt-dev libssl-dev zlib1g-dev libzstd-dev libvulkan-dev mesa-vulkan-drivers mesa-utils vulkan-tools'
+packages='systemd systemd-sysv dbus sudo locales tzdata ca-certificates gnupg curl wget network-manager openssh-server nano vim rsync kmod initramfs-tools build-essential clang lld cmake ninja-build git pkg-config python3 gdb libbabeltrace-dev libcap-dev libelf-dev libdw-dev libtraceevent-dev libtracefs-dev liblzma-dev libslang2-dev libunwind-dev libfmt-dev libssl-dev zlib1g-dev libzstd-dev libvulkan-dev mesa-vulkan-drivers mesa-utils vulkan-tools'
 
 env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/root LANG=C.UTF-8 \
   OUTPUT_DIR="$output_dir" OUTPUT_PREFIX=nx769j-kubuntu-arm64 \

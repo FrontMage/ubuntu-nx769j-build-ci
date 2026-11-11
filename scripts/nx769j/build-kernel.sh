@@ -106,7 +106,10 @@ tar --sort=name --owner=0 --group=0 --numeric-owner -C "$staging" -cf - lib | \
 zstd -dc "$temp_dir/modules.tar.zst" | \
   python3 "$repo_dir/scripts/nx769j/check-module-tar.py" "$kernel_release"
 
-make -C "$kernel_dir/tools/perf" -j"$jobs" WERROR=0
+# perf must run inside the (newer) target rootfs, so it must not link the
+# runner's version-locked libpython or libLLVM sonames. Core sampling,
+# record/report and probe support do not need either.
+make -C "$kernel_dir/tools/perf" -j"$jobs" WERROR=0 NO_LIBPYTHON=1 NO_LIBLLVM=1
 perf_path="$kernel_dir/tools/perf/perf"
 [ -x "$perf_path" ] || { echo "perf was not produced: $perf_path" >&2; exit 1; }
 if command -v readelf >/dev/null; then
