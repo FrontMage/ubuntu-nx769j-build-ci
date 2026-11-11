@@ -1,0 +1,128 @@
+name: NX769J offline candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: kernel builds only the kernel job; full also builds the rootfs
+        type: choice
+        options:
+          - kernel
+          - full
+        default: kernel
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  kernel:
+    name: Kernel, NX769J DTB, modules and matching perf
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check available runner disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/ci-logs
+          df -h "$RUNNER_TEMP" | tee out/ci-logs/kernel-disk-before.txt
+          available_kib=$(df -Pk "$RUNNER_TEMP" | awk 'NR == 2 {print $4}')
+          if (( available_kib < 9 * 1024 * 1024 )); then
+            echo 'Less than 9 GiB is free before the kernel build; not proceeding.' | tee -a out/ci-logs/kernel-disk-before.txt
+            exit 1
+          fi
+      - name: Install public build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential clang cmake curl device-tree-compiler flex \
+            binutils-dev git kmod libbabeltrace-dev libcap-dev libdw-dev libelf-dev \
+            liblzma-dev libslang2-dev libssl-dev libunwind-dev libzstd-dev lld llvm \
+            ninja-build pkg-config python3 python3-pip rsync xz-utils zlib1g-dev zstd
+          sudo apt-get clean
+      - name: Build untested NX769J kernel bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/nx769j/build-kernel.sh 2>&1 | tee out/ci-logs/kernel-build.log
+          cd out/nx769j-kernel
+          test -s Image && test -s nx769j.dtb && test -s modules.tar.zst
+          test -s perf && test -s kernel-manifest.json
+          sha256sum Image nx769j.dtb modules.tar.zst perf kernel-manifest.json > SHA256SUMS
+          sha256sum -c SHA256SUMS
+      - name: Upload kernel bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: nx769j-kernel-untested
+          path: out/nx769j-kernel/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Retain failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nx769j-kernel-failure-logs
+          path: out/ci-logs/
+          retention-days: 7
+          if-no-files-found: warn
+
+  rootfs:
+    name: Ubuntu ARM64 KDE candidate root filesystem
+    if: inputs.stage == 'full'
+    needs: kernel
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nx769j-kernel-untested
+          path: out/nx769j-kernel
+      - name: Check kernel artifact and runner disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/ci-logs out/nx769j-rootfs
+          (cd out/nx769j-kernel && sha256sum -c SHA256SUMS)
+          df -h "$RUNNER_TEMP" | tee out/ci-logs/rootfs-disk-before.txt
+          available_kib=$(df -Pk "$RUNNER_TEMP" | awk 'NR == 2 {print $4}')
+          if (( available_kib < 10 * 1024 * 1024 )); then
+            echo 'Less than 10 GiB is free before rootfs provisioning; not proceeding.' | tee -a out/ci-logs/rootfs-disk-before.txt
+            exit 1
+          fi
+      - name: Install image-build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binutils curl debootstrap e2fsprogs patch python3 rsync util-linux zstd
+          sudo apt-get clean
+      - name: Build and check the candidate image
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=RUNNER_TEMP bash scripts/nx769j/build-rootfs.sh out/nx769j-kernel out/nx769j-rootfs 2>&1 | tee out/ci-logs/rootfs-build.log
+          kernel_release=$(python3 -c 'import json; print(json.load(open("out/nx769j-kernel/kernel-manifest.json"))["kernel_release"])')
+          rootfs_uuid=$(cat out/nx769j-rootfs/ROOTFS-UUID.txt)
+          sudo --preserve-env=RUNNER_TEMP bash scripts/nx769j/verify-rootfs.sh \
+            out/nx769j-rootfs/nx769j-kubuntu-arm64-rootfs.img "$kernel_release" "$rootfs_uuid" 2>&1 | tee out/ci-logs/rootfs-verify.log
+          sudo rm -- out/nx769j-rootfs/nx769j-kubuntu-arm64-rootfs.img
+          (cd out/nx769j-rootfs && sha256sum -c nx769j-kubuntu-arm64-rootfs.SHA256SUMS)
+      - name: Upload rootfs candidate and checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: nx769j-rootfs-untested
+          path: out/nx769j-rootfs/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Retain failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nx769j-rootfs-failure-logs
+          path: out/ci-logs/
+          retention-days: 7
+          if-no-files-found: warn

@@ -1,0 +1,107 @@
+diff --git a/scripts/ci/build-rootfs-image.sh b/scripts/ci/build-rootfs-image.sh
+index 1bd2e2b..b148fda 100755
+--- a/scripts/ci/build-rootfs-image.sh
++++ b/scripts/ci/build-rootfs-image.sh
+@@ -27,9 +27,11 @@ Environment inputs:
+   ROOTFS_UUID                optional ext4 UUID
+   ROOTFS_LABEL               default: Ubuntu
+   ROOTFS_PARTLABEL           metadata only, default: userdata
++  ROOTFS_DEVICE_PROFILE      tb321fu|generic, default: tb321fu
+   HOSTNAME_NAME              default: y700
+   DEFAULT_USER_NAME          default: y700
+   DEFAULT_USER_PASSWORD      default: 1234
++  LOCK_DEFAULT_USER          lock the default user's password, default: 0
+   ROOT_PASSWORD_MODE         locked|set|empty, default: locked
+   ROOT_PASSWORD              used when ROOT_PASSWORD_MODE=set
+   USER_SUDO_MODE             password|nopasswd|none, default: password
+@@ -93,9 +95,11 @@ OUTPUT_DIR=${OUTPUT_DIR:-out/ci-rootfs}
+ ROOTFS_IMAGE_SIZE=${ROOTFS_IMAGE_SIZE:-14G}
+ ROOTFS_LABEL=${ROOTFS_LABEL:-Ubuntu}
+ ROOTFS_PARTLABEL=${ROOTFS_PARTLABEL:-userdata}
++ROOTFS_DEVICE_PROFILE=${ROOTFS_DEVICE_PROFILE:-tb321fu}
+ HOSTNAME_NAME=${HOSTNAME_NAME:-y700}
+ DEFAULT_USER_NAME=${DEFAULT_USER_NAME:-y700}
+ DEFAULT_USER_PASSWORD=${DEFAULT_USER_PASSWORD:-1234}
++LOCK_DEFAULT_USER=${LOCK_DEFAULT_USER:-0}
+ ROOT_PASSWORD_MODE=${ROOT_PASSWORD_MODE:-locked}
+ ROOT_PASSWORD=${ROOT_PASSWORD:-}
+ USER_SUDO_MODE=${USER_SUDO_MODE:-password}
+@@ -118,6 +122,11 @@ COMPRESS=${COMPRESS:-7z}
+ CHUNK_SIZE=${CHUNK_SIZE:-}
+ KEEP_RAW_IMAGE=${KEEP_RAW_IMAGE:-0}
+ 
++case "$ROOTFS_DEVICE_PROFILE" in
++  tb321fu|generic) ;;
++  *) ci_die "unsupported ROOTFS_DEVICE_PROFILE=$ROOTFS_DEVICE_PROFILE" ;;
++esac
++
+ default_packages="systemd systemd-sysv dbus sudo locales tzdata ca-certificates gnupg curl wget network-manager openssh-server nano vim rsync kmod initramfs-tools"
+ PACKAGE_LIST=${PACKAGE_LIST:-$default_packages}
+ if [ -n "${DESKTOP_ENV:-}" ]; then
+@@ -712,6 +721,7 @@ KWINRC
+ chmod 0644 /etc/xdg/kwinrc
+ cp -a /etc/xdg/kwinrc /etc/skel/.config/kwinrc
+ 
++if [ "$ROOTFS_DEVICE_PROFILE" = tb321fu ]; then
+ cat > /etc/skel/.config/kwinoutputconfig.json <<'KWINOUTPUTCONFIG'
+ [
+     {
+@@ -759,6 +769,7 @@ cat > /etc/skel/.config/kwinoutputconfig.json <<'KWINOUTPUTCONFIG'
+ ]
+ KWINOUTPUTCONFIG
+ chmod 0644 /etc/skel/.config/kwinoutputconfig.json
++fi
+ 
+ systemctl enable NetworkManager || true
+ systemctl enable ssh || true
+@@ -766,12 +777,18 @@ systemctl enable ssh || true
+ if ! id -u "$DEFAULT_USER_NAME" >/dev/null 2>&1; then
+   useradd -m -s /bin/bash "$DEFAULT_USER_NAME"
+ fi
+-printf '%s:%s\n' "$DEFAULT_USER_NAME" "$DEFAULT_USER_PASSWORD" | chpasswd
++if ci_bool_chroot "$LOCK_DEFAULT_USER"; then
++  # A publicly downloadable image must not contain a known login password.
++  usermod -p '!' "$DEFAULT_USER_NAME"
++else
++  printf '%s:%s\n' "$DEFAULT_USER_NAME" "$DEFAULT_USER_PASSWORD" | chpasswd
++fi
+ 
+ default_user_group=$(id -gn "$DEFAULT_USER_NAME")
+ if [ -d "/home/$DEFAULT_USER_NAME" ]; then
+   install -d -m 0755 "/home/$DEFAULT_USER_NAME/.config"
+   for skel_config in kwinrc plasmakeyboardrc kwinoutputconfig.json; do
++    [ -f "/etc/skel/.config/$skel_config" ] || continue
+     cp -a "/etc/skel/.config/$skel_config" "/home/$DEFAULT_USER_NAME/.config/$skel_config"
+     chown "$DEFAULT_USER_NAME:$default_user_group" "/home/$DEFAULT_USER_NAME/.config/$skel_config"
+   done
+@@ -929,8 +946,10 @@ chroot "$rootfs_dir" env -i \
+   LANG=C.UTF-8 \
+   PACKAGE_LIST="$PACKAGE_LIST" \
+   INSTALL_FCITX5_CHINESE="$INSTALL_FCITX5_CHINESE" \
++  ROOTFS_DEVICE_PROFILE="$ROOTFS_DEVICE_PROFILE" \
+   DEFAULT_USER_NAME="$DEFAULT_USER_NAME" \
+   DEFAULT_USER_PASSWORD="$DEFAULT_USER_PASSWORD" \
++  LOCK_DEFAULT_USER="$LOCK_DEFAULT_USER" \
+   ROOT_PASSWORD_MODE="$ROOT_PASSWORD_MODE" \
+   ROOT_PASSWORD="$ROOT_PASSWORD" \
+   USER_SUDO_MODE="$USER_SUDO_MODE" \
+@@ -969,7 +988,9 @@ if [ -n "${OVERLAY_DIR:-}" ]; then
+ fi
+ 
+ apply_sddm_autologin "$rootfs_dir"
+-apply_tb321fu_legacy_cleanup "$rootfs_dir"
++if [ "$ROOTFS_DEVICE_PROFILE" = tb321fu ]; then
++  apply_tb321fu_legacy_cleanup "$rootfs_dir"
++fi
+ 
+ if ci_bool "$APPLY_Y700_FIRMWARE_FIXES"; then
+   apply_y700_firmware_fixes "$rootfs_dir"
+@@ -989,6 +1010,8 @@ debootstrap_variant=$DEBOOTSTRAP_VARIANT
+ mirror=$MIRROR
+ hostname=$HOSTNAME_NAME
+ default_user=$DEFAULT_USER_NAME
++default_user_locked=$LOCK_DEFAULT_USER
++device_profile=$ROOTFS_DEVICE_PROFILE
+ root_password_mode=$ROOT_PASSWORD_MODE
+ user_sudo_mode=$USER_SUDO_MODE
+ sddm_autologin=$SDDM_AUTOLOGIN
