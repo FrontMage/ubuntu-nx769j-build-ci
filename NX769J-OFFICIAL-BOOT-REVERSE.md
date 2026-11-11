@@ -105,7 +105,17 @@ slot only, hash read-back, and dumps captured before any recovery reset.
 6. **Minimal DT:** only disable candidate-enabled UFS and USB/PHY nodes
    to separate early SoC handoff from storage/USB probing.
 
-Stop this device path if step 1 produces no new observable state and
+### Outcome of step 1 (2026-11-11)
+
+`boot-candidate-06-idonly` changed only the two root ID properties
+(same kernel, initramfs, ramdisk and images as candidate-05 besides
+`vendor_boot.img`). It reproduced the same memory-dump state about
+28 seconds after reboot. Root ID properties alone therefore do not
+explain the failure, and the new RAMCON still contains no candidate
+kernel text. The next single variable is the stock UART `stdout-path`
+plus `earlycon`, not another combined DT rewrite.
+
+Stop this device path if step 2 also produces no new observable state and
 the XBL/UEFI logs cannot be decoded offline. At that point the missing
 evidence requires a hardware UART/JTAG path or a device-specific ABL
 build, which is a materially larger project than the remaining budget.
