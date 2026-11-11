@@ -79,6 +79,10 @@ def main():
         "--pagesize 4096" in pack_script,
     )
     check(
+        "boot candidate pins stock vendor load offsets",
+        "--base 0x00000000" in pack_script and "--dtb_offset 0x01f00000" in pack_script,
+    )
+    check(
         "boot candidate is marked do-not-flash",
         "DO_NOT_FLASH" in pack_script,
     )

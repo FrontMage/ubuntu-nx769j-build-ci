@@ -47,7 +47,7 @@ stock 4096-byte vendor page size:
 | --- | ---: | --- |
 | `boot.img` | 59281408 | `a9697a7a0f07d54557502a9e57bf253c48423238e6f0682b3898457d63ef44e7` |
 | `init_boot.img` | 1011712 | `1d702572639866f092cf7a99d6d52799055beffcfa3fbd2c991d5289a6c81c22` |
-| `vendor_boot.img` | 1142784 | `352cd84fd4ac9bd3555ae4096e62224ae6fd5afabe1b174cf5ed595ef536ce93` |
+| `vendor_boot.img` | 1142784 | `4aba3237e95c005e947c76a527ef944aa5f76d61470c6bbf9bdbfe50c4882f02` |
 | `initramfs.cpio.gz` | 1005031 | `848a7e963650dac5045b07a6210b84071567354b73c525a6214ec90fa5de56f8` |
 
 All three images round-tripped through upstream `unpack_bootimg.py`;
@@ -55,11 +55,27 @@ kernel, DTB and ramdisk payloads compare byte-identical to their inputs.
 Tools: AOSP `mkbootimg.py`/`unpack_bootimg.py` (android14-release) and
 Ubuntu `busybox-static` 1.36.1-6ubuntu3.1 (arm64).
 
+## Device backup taken 2026-11-11 (private, local only)
+
+With the owner's confirmation, 20 boot-chain partitions were streamed
+read-only (`dd` over Magisk root) to a private local directory outside
+this repository: both slots of `boot`, `init_boot`, `vendor_boot`,
+`dtbo`, `vbmeta`, `vbmeta_system`, `recovery`, `abl`, plus `persist`,
+`modemst1/2` and `fsg` (about 722 MiB, every size and SHA-256 verified).
+`super` and `userdata` were deliberately excluded. Measured against
+`NX769J-STOCK-OTA-AUDIT.md`, the active-slot `boot_b` and
+`vendor_boot_b` hashes match the stock OTA exactly (unmodified), while
+`init_boot_b` carries Magisk markers in its ramdisk — consistent with
+the owner's earlier VM/root work. That modification does not affect
+this Linux candidate (it replaces `init_boot` wholesale), and the
+backup preserves the exact current state for Android restoration.
+The candidate's vendor load offsets were also aligned to the dumped
+stock `vendor_boot_b` header (base 0; kernel `0x8000`, ramdisk
+`0x01000000`, tags `0x100`, DTB `0x1f00000`).
+
 ## Remaining gates before any device write
 
-- Dump and hash the active-slot `boot`, `init_boot`, `vendor_boot`,
-  `dtbo`, `vbmeta*` (needs root or a proven read path) and derive a
-  restorable stock state; download and authenticate an EDL package.
+- Download and authenticate an EDL package as a second recovery path.
 - Decide rootfs placement (no partition is assigned today) and whether
   Android is retained, before any partition table or `super` change.
 - Observe how this bootloader merges vendor cmdline, selects DTB

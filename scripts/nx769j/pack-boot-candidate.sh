@@ -39,7 +39,11 @@ cmdline="root=UUID=$rootfs_uuid rw rootwait console=tty0 loglevel=7"
 mk --header_version 4 --pagesize 4096 --kernel "$kernel_dir/Image" -o "$output_dir/boot.img"
 mk --header_version 4 --pagesize 4096 --ramdisk "$temp_dir/initramfs.cpio.gz" \
   -o "$output_dir/init_boot.img"
+# Load offsets below were read from this device's stock vendor_boot_b
+# header (dumped 2026-11-11); mkbootimg defaults are base 0x10000000.
 mk --header_version 4 --pagesize 4096 --vendor_cmdline "$cmdline" \
+  --base 0x00000000 --kernel_offset 0x00008000 --ramdisk_offset 0x01000000 \
+  --tags_offset 0x00000100 --dtb_offset 0x01f00000 \
   --dtb "$kernel_dir/nx769j.dtb" --vendor_ramdisk "$temp_dir/initramfs.cpio.gz" \
   --vendor_boot "$output_dir/vendor_boot.img"
 
@@ -84,7 +88,7 @@ manifest = {
     "avb_signed": False,
     "hardware_verification": "not_performed",
     "unresolved_gates": [
-        "stock backup of active-slot partitions not yet taken",
+        "local private backup of boot-chain partitions taken 2026-11-11; super and userdata excluded",
         "partition placement for the root filesystem not decided",
         "bootloader DTB selection and cmdline merge not observed",
         "display/touch/GPU/Wi-Fi/audio disabled in the candidate DTB",
