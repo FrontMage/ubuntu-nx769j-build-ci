@@ -19,23 +19,61 @@ INIT = """#!/bin/sh
 mount -t devtmpfs devtmpfs /dev 2>/dev/null
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
-echo "nx769j: experimental initramfs, waiting for root UUID __UUID__"
-dev=""
-for i in $(seq 1 100); do
+mkdir -p /probe /newroot
+echo "nx769j: bring-up initramfs (expected root UUID __UUID__)"
+
+# Observation channel for headless bring-up: USB NCM + telnet shell.
+mount -t configfs none /sys/kernel/config 2>/dev/null
+G=/sys/kernel/config/usb_gadget/g1
+if mkdir -p "$G/strings/0x409" "$G/configs/c.1" "$G/functions/ncm.usb0" 2>/dev/null; then
+  echo 0x1d6b > "$G/idVendor"; echo 0x0104 > "$G/idProduct"
+  echo nx769j > "$G/strings/0x409/manufacturer"
+  echo "NX769J bring-up" > "$G/strings/0x409/product"
+  echo nx769j001 > "$G/strings/0x409/serialnumber"
+  ln -s "$G/functions/ncm.usb0" "$G/configs/c.1/" 2>/dev/null
+  for u in /sys/class/udc/*; do [ -e "$u" ] && echo "$(basename "$u")" > "$G/UDC"; done
+  for i in $(seq 1 25); do [ -e /sys/class/net/usb0 ] && break; sleep 0.2; done
+  ifconfig usb0 10.42.0.2 netmask 255.255.255.0 up 2>/dev/null
+  telnetd -p 23 -l /bin/sh 2>/dev/null
+  echo "nx769j: usb0 10.42.0.2 telnet shell (if listed above)"
+fi
+
+# Probe partitions by content (no blkid in this busybox): a direct ext4
+# root carries our BUILD-STATUS; Android userdata (F2FS) may carry
+# /nxlinux/rootfs.img for loop mounting. All probes are read-only.
+rootdev=""
+for i in $(seq 1 60); do
   mdev -s 2>/dev/null
-  for d in $(blkid 2>/dev/null | grep "__UUID__" | cut -d: -f1); do dev=$d; done
-  [ -n "$dev" ] && break
-  sleep 0.2
+  for dev in /dev/sd[a-z][0-9]* /dev/mmcblk[0-9]p[0-9]*; do
+    [ -b "$dev" ] || continue
+    if mount -t ext4 -o ro "$dev" /probe 2>/dev/null; then
+      if [ -f /probe/usr/share/nx769j/BUILD-STATUS.txt ]; then rootdev=$dev; fi
+      umount /probe 2>/dev/null
+      [ -n "$rootdev" ] && break
+    fi
+    if mount -t f2fs -o ro "$dev" /probe 2>/dev/null; then
+      if [ -f /probe/nxlinux/rootfs.img ]; then
+        echo "nx769j: loop rootfs image on $dev"
+        mkdir -p /userdata && mount -t f2fs -o ro "$dev" /userdata 2>/dev/null
+        umount /probe 2>/dev/null
+        if losetup /dev/loop0 /userdata/nxlinux/rootfs.img 2>/dev/null; then
+          rootdev=/dev/loop0
+        fi
+      fi
+      umount /probe 2>/dev/null
+      [ -n "$rootdev" ] && break
+    fi
+  done
+  [ -n "$rootdev" ] && break
+  sleep 0.5
 done
-if [ -n "$dev" ]; then
-  echo "nx769j: mounting $dev as /"
-  mkdir -p /newroot
-  if mount -t ext4 -o rw "$dev" /newroot; then
-    killall mdev 2>/dev/null
+if [ -n "$rootdev" ]; then
+  echo "nx769j: mounting $rootdev as /"
+  if mount -t ext4 -o rw "$rootdev" /newroot; then
     exec switch_root /newroot /sbin/init
   fi
 fi
-echo "nx769j: root filesystem not found or not mountable; emergency shell"
+echo "nx769j: no root filesystem yet; emergency shell (console + telnet)"
 exec sh
 """
 
@@ -77,6 +115,8 @@ def main():
         entry("proc", directory),
         entry("sys", directory),
         entry("newroot", directory),
+        entry("probe", directory),
+        entry("userdata", directory),
         entry("dev/console", 0o020600, rdev=(5, 1)),
         entry("dev/null", 0o020666, rdev=(1, 3)),
         entry("bin/busybox", 0o100755, busybox),
