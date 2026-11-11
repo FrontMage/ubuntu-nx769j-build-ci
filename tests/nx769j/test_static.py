@@ -82,6 +82,20 @@ def main():
         "boot candidate pins stock vendor load offsets",
         "--base 0x00000000" in pack_script and "--dtb_offset 0x01f00000" in pack_script,
     )
+
+    aligned_script = (NX / "pack-boot-v2-aligned.py").read_text(encoding="utf-8")
+    kernel_script = (NX / "build-kernel.sh").read_text(encoding="utf-8")
+    check(
+        "kernel build embeds its initramfs",
+        "INITRAMFS_SOURCE" in kernel_script and "make-initramfs.py" in kernel_script,
+    )
+    check(
+        "aligned v2 layout uses Cerro parameters",
+        all(x in aligned_script for x in (
+            '"--header_version", "2"', '"--pagesize", "4096"',
+            '"--kernel_offset", "0x00008000"', 'PARTITION_SIZE = 100_663_296',
+            'earlycon=qcom_geni,0x0089c000')),
+    )
     check(
         "boot candidate is marked do-not-flash",
         "DO_NOT_FLASH" in pack_script,

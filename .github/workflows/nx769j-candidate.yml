@@ -38,7 +38,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential clang cmake curl device-tree-compiler flex \
+            bc bison build-essential busybox-static clang cmake curl device-tree-compiler flex \
             binutils-dev git kmod libbabeltrace-dev libcap-dev libdw-dev libelf-dev \
             liblzma-dev libslang2-dev libssl-dev libtraceevent-dev libtracefs-dev \
             libunwind-dev libzstd-dev lld llvm \
@@ -51,8 +51,8 @@ jobs:
           bash scripts/nx769j/build-kernel.sh 2>&1 | tee out/ci-logs/kernel-build.log
           cd out/nx769j-kernel
           test -s Image && test -s nx769j.dtb && test -s modules.tar.zst
-          test -s perf && test -s kernel-manifest.json
-          sha256sum Image nx769j.dtb modules.tar.zst perf kernel-manifest.json > SHA256SUMS
+          test -s perf && test -s kernel-manifest.json && test -s embedded-initramfs.cpio.gz
+          sha256sum Image nx769j.dtb modules.tar.zst embedded-initramfs.cpio.gz perf kernel-manifest.json > SHA256SUMS
           sha256sum -c SHA256SUMS
       - name: Upload kernel bundle
         uses: actions/upload-artifact@v4

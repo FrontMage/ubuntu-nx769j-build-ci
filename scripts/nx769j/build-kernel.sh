@@ -64,10 +64,22 @@ done
 install -m 0644 "$device_dir/sm8650-nubia-nx769j.dts" \
   "$kernel_dir/arch/arm64/boot/dts/qcom/sm8650-nubia-nx769j.dts"
 
+busybox_bin=${BUSYBOX:-$(command -v busybox || true)}
+[ -n "$busybox_bin" ] && [ -x "$busybox_bin" ] || {
+  echo 'busybox is required to generate the embedded initramfs' >&2; exit 1; }
+embedded_initramfs="$temp_dir/embedded-initramfs.cpio.gz"
+python3 "$repo_dir/scripts/nx769j/make-initramfs.py" \
+  "$busybox_bin" "${ROOTFS_UUID:-ec0c73a6-b4f0-4310-b2fd-d100ff7be1f4}" \
+  "$embedded_initramfs"
+
 make -C "$kernel_dir" ARCH=arm64 defconfig
 "$kernel_dir/scripts/kconfig/merge_config.sh" -O "$kernel_dir" -m \
   "$kernel_dir/.config" "$device_dir/nx769j.config"
+"$kernel_dir/scripts/config" --file "$kernel_dir/.config" \
+  --set-str INITRAMFS_SOURCE "$embedded_initramfs"
 make -C "$kernel_dir" ARCH=arm64 olddefconfig
+grep -qxF "CONFIG_INITRAMFS_SOURCE=\"$embedded_initramfs\"" "$kernel_dir/.config" || {
+  echo 'embedded initramfs source did not survive olddefconfig' >&2; exit 1; }
 
 # Fail loudly if olddefconfig dropped anything the fragment requested; a
 # silently missing UFS/PHY/perf symbol would only surface on the device.
@@ -136,6 +148,7 @@ manifest = {
     "dtb_source": "devices/nx769j/kernel/sm8650-nubia-nx769j.dts",
     "dtb_output": "nx769j.dtb",
     "boot_image_included": False,
+    "embedded_initramfs_included": True,
     "hardware_verification": "not_performed",
 }
 with open(sys.argv[1], "w", encoding="utf-8") as f:
@@ -146,6 +159,7 @@ PY
 install -m 0644 "$kernel_dir/arch/arm64/boot/Image" "$output_dir/Image"
 install -m 0644 "$dtb_path" "$output_dir/nx769j.dtb"
 install -m 0644 "$temp_dir/modules.tar.zst" "$output_dir/modules.tar.zst"
+install -m 0644 "$embedded_initramfs" "$output_dir/embedded-initramfs.cpio.gz"
 install -m 0755 "$perf_path" "$output_dir/perf"
 install -m 0644 "$temp_dir/kernel-manifest.json" "$output_dir/kernel-manifest.json"
 printf 'NX769J kernel bundle built: release=%s commit=%s; hardware untested, no boot image.\n' \
