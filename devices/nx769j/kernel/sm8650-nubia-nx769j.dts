@@ -28,6 +28,9 @@
 / {
 	model = "nubia REDMAGIC 9 Pro (NX769J, experimental)";
 	compatible = "nubia,nx769j", "qcom,sm8650";
+	/* Values read from this unit's stock runtime FDT. */
+	qcom,msm-id = <0x22d 0x20000 0x241 0x20000>;
+	qcom,board-id = <0x08 0x00>;
 	chassis-type = "handset";
 
 	/* QRD boot-time supply model; electrical validation is still required. */
