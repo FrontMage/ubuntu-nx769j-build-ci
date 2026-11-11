@@ -105,6 +105,25 @@ slot only, hash read-back, and dumps captured before any recovery reset.
 6. **Minimal DT:** only disable candidate-enabled UFS and USB/PHY nodes
    to separate early SoC handoff from storage/USB probing.
 
+### Temporary Cerro-style v2 boot (2026-11-11)
+
+A separate RAM-only experiment then reproduced the Nubia Cerro
+`Scheme E` shape: candidate-05 kernel padded to its ARM64
+`image_size`, the candidate DTB appended at that offset, the same DTB
+also carried by an Android boot-image header v2, and the 96 MiB image
+started with `fastboot boot` from the current slot-B ZTE engineering
+ABL. No partition or slot was changed. The host reported download and
+`Booting OKAY`, the handset stayed on the RedMagic logo, and the
+fastboot USB session remained alive; a subsequent `fastboot continue`
+returned `Failed to load image from partition: Load Error`, while
+slot B still reported `successful=yes`. Reasserting slot B and issuing
+a normal reboot returned Android (`boot_completed=1`). This proves
+the v2 temporary image was rejected before kernel handoff in this
+form; it is not evidence about the flashed Cerro same-slot layout,
+which also zeroes DTBO and uses that project's proven reference boot
+header/cmdline and embedded initramfs. No new log was found in
+`logfs`, `logdump`, pstore or boot-reason properties.
+
 ### Outcome of step 1 (2026-11-11)
 
 `boot-candidate-06-idonly` changed only the two root ID properties
