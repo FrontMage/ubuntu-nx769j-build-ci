@@ -92,6 +92,29 @@ backup manifest). The early-crash cause is still unknown: the RAM
 console region was listed (52 minidump regions, about 4.4 MiB) but not
 captured before recovery, and no pstore records survived.
 
+## OpenABL slot-A attempt and later recovery on 2026-11-11
+
+At the owner's request, the next controlled experiment replaced only the
+inactive slot-A bootloader with OpenABL v1.2 for SM8650 and populated
+`boot_a` with a FAT/LPS Type-1 boot entry containing the already-built
+NX769J initramfs, the candidate DTB and the verified SteamOS SM8650 kernel
+payload. All of slot B and the remainder of the boot chain stayed in place.
+After switching to slot A, the handset went back to Qualcomm memory-dump
+mode and produced neither an OpenABL menu nor its normal fastboot. A
+subsequent read of the small Sahara minidump was attempted but lost the
+USB session and did not produce usable boot logs. The now-proven recovery
+path—Sahara reset with both volume keys held, entry to `05c6:9008`,
+firehose `setactiveslot b`, and restoration of slot A from this backup—again
+returned the handset to Android. Therefore, the stock ZTE-signed ABL and the
+A/B Android images are reinstated. This outcome establishes that a standard
+EDL recovery path exists for this unit, but it does not distinguish yet
+between OpenABL's test signing being rejected, an NX769J-specific OpenABL
+configuration/handoff incompatibility, or another platform-init failure.
+The next attempt must capture and inspect `RAMCON.BIN`, `md_XBL_LOG.BIN`,
+`md_UEFI_LOG.BIN`, and the reset-status regions before issuing any reset.
+Do not repeat an ABL replacement until those records or a device-specific
+OpenABL build explain the hand-off failure.
+
 ## Remaining gates before any further device write
 
 - Capture and analyze the RAM console on the next failure (the Sahara
