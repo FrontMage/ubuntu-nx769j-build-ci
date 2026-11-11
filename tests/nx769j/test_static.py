@@ -73,7 +73,18 @@ def main():
         "boot.img" not in kernel_script and "mkbootimg" not in kernel_script,
     )
 
+    pack_script = (NX / "pack-boot-candidate.sh").read_text(encoding="utf-8")
+    check(
+        "boot candidate pins stock 4096 page size",
+        "--pagesize 4096" in pack_script,
+    )
+    check(
+        "boot candidate is marked do-not-flash",
+        "DO_NOT_FLASH" in pack_script,
+    )
+
     for rel in (
+        "scripts/nx769j/make-initramfs.py",
         "devices/nx769j/kernel/sm8650-nubia-nx769j.dts",
         "devices/nx769j/kernel/nx769j.config",
         "devices/nx769j/kernel/qcom-nx769j-binding.patch",
