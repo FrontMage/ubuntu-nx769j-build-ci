@@ -115,10 +115,31 @@ The next attempt must capture and inspect `RAMCON.BIN`, `md_XBL_LOG.BIN`,
 Do not repeat an ABL replacement until those records or a device-specific
 OpenABL build explain the hand-off failure.
 
+## Ramoops candidate attempt later on 2026-11-11
+
+`boot-candidate-05` added the stock 2 MiB ramoops region at
+`0xd7e00000` with built-in `PSTORE_RAM`/`PSTORE_CONSOLE` and was flashed
+only to inactive slot A after a fresh byte-for-byte slot/backup audit.
+It reproduced the same Qualcomm memory-dump state in about 28 seconds.
+The mature `bkerler/edl` client (explicit `--vid=19d2 --pid=0112`) then
+downloaded all requested minidump regions without transfer errors.
+The new `RAMCON.BIN` still contains only stock Android 6.1 logs: no
+candidate `7.1.1-nx769j+` string, panic text or candidate call trace is
+present. That bounds the failure to before the candidate's ramoops
+driver could register and write, or to a probe failure; it does not
+localize a peripheral driver. The XBL, UEFI, TZ and hypervisor regions
+are opaque Qualcomm binary records and remain undecoded. Recovery used
+the same proven Sahara-to-EDL route; slot B Android completed boot with
+root intact and slot A was restored byte-identically from backup.
+The next useful evidence must therefore come from a channel that works
+before normal driver probing (for example decoded XBL/UEFI logs, an
+early framebuffer/serial console, or a raw DDR search for the candidate
+kernel's printk ring), not from another unchanged full-image retry.
+
 ## Remaining gates before any further device write
 
-- Capture and analyze the RAM console on the next failure (the Sahara
-  memory-debug listing path is proven; use it before recovery resets).
+- Obtain a log channel that works before the candidate's ramoops
+  driver could register, or decode the captured Qualcomm binary logs.
 - Decide rootfs placement (no partition is assigned today) and whether
   Android is retained, before any partition table or `super` change.
 - Observe how this bootloader merges vendor cmdline, selects DTB
