@@ -124,6 +124,49 @@ which also zeroes DTBO and uses that project's proven reference boot
 header/cmdline and embedded initramfs. No new log was found in
 `logfs`, `logdump`, pstore or boot-reason properties.
 
+### Cerro-aligned offline rebuild (2026-11-11)
+
+The public Cerro scripts were then diffed against the rejected local
+v2 temporary image. Boot-header fields we used already matched:
+header v2, 4096-byte pages, base 0, kernel/ramdisk/second/tags/DTB
+offsets `0x8000/0x01000000/0/0x100/0x01f00000`, OS 16.0.0 /
+2026-07 and a 96 MiB partition-sized result. The substantive deltas
+were elsewhere:
+
+| Field | Proven Cerro layout | Rejected local v2 test |
+|---|---|---|
+| External ramdisk | exactly 127 bytes (stub) | 1,005,755-byte real initramfs |
+| Real initramfs | gzip/newc archive embedded in `Image` | only in boot-image ramdisk field |
+| Cmdline start | `ignore_loglevel pd_ignore_unused clk_ignore_unused console=ttyMSM0,115200n8 earlycon=qcom_geni,0x0089c000` | `console=tty0 console=ttyMSM0,115200n8 earlycon` |
+| DTB | kernel-built board DTB also carried by their wrap object and appended after padded `Image` | appended/header DTB, no wrap object |
+| Deployment | written to active boot slot with active DTBO zeroed | RAM-only `fastboot boot` with stock DTBO still present |
+
+The kernel builder now generates the existing NX769J initramfs before
+compilation and sets it as `CONFIG_INITRAMFS_SOURCE`;
+`pack-boot-v2-aligned.py` refuses artifacts whose embedded archive
+does not contain the expected `/init`, uses a valid deterministic
+127-byte gzip/newc stub, reproduces Cerro's header values and verifies
+its own round-trip. This still does not port Cerro's built-in-DTB wrap
+object or its private known-good embedded init, so the result is an
+alignment candidate for review, not a claim of equivalence.
+
+The first aligned CI attempt and its rerun both failed before kernel
+compilation while apt was resolving archive hosts. Their 3.7 GB job log
+ends in repeated `Temporary failure resolving 'ports.ubuntu.com'`
+messages for 23 packages; this was runner DNS failure, not a missing
+package or a kernel error. Removing the extra apt package and using
+the runner's statically linked `/usr/lib/initramfs-tools/bin/busybox`
+produced successful run `43067542050` at build-repo commit `469bf00`.
+The resulting offline `boot-candidate-07-aligned` passed a second,
+packer-independent check: kernel payload = the downloaded `Image`,
+zero padding through its declared `image_size` (61,865,984), then the
+exact candidate DTB; header DTB also matches, the external ramdisk is
+a valid 127-byte gzip/newc stub, and the embedded config records
+built-in pstore RAM/console plus the generated initramfs source. The
+96 MiB image SHA-256 is
+`0f0c87229fce5c6132efd7d7ee51918a6fc512baf724bb13bb80151337a96932`.
+It has not been flashed.
+
 ### Outcome of step 1 (2026-11-11)
 
 `boot-candidate-06-idonly` changed only the two root ID properties

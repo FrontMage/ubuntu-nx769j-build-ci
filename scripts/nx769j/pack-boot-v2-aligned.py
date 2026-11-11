@@ -124,7 +124,7 @@ def main():
          "--boot_img", str(out), "--format=info"],
         capture_output=True, text=True,
         env={**__import__("os").environ, "PYTHONPATH": str(tools_dir)}, check=True)
-    for needle in ("boot image header version: 2", "page size: 0x00001000",
+    for needle in ("boot image header version: 2", "page size: 4096",
                    "ramdisk size: 127", "@0x0089c000"):
         if needle == "@0x0089c000":
             if "0x0089c000" not in unpack.stdout:
