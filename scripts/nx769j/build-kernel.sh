@@ -65,8 +65,14 @@ install -m 0644 "$device_dir/sm8650-nubia-nx769j.dts" \
   "$kernel_dir/arch/arm64/boot/dts/qcom/sm8650-nubia-nx769j.dts"
 
 busybox_bin=${BUSYBOX:-$(command -v busybox || true)}
+if { [ -z "$busybox_bin" ] || [ ! -x "$busybox_bin" ]; } \
+   && [ -x /usr/lib/initramfs-tools/bin/busybox ]; then
+  busybox_bin=/usr/lib/initramfs-tools/bin/busybox
+fi
 [ -n "$busybox_bin" ] && [ -x "$busybox_bin" ] || {
   echo 'busybox is required to generate the embedded initramfs' >&2; exit 1; }
+file "$busybox_bin" | grep -q 'statically linked' || {
+  echo "busybox candidate is not statically linked: $busybox_bin" >&2; exit 1; }
 embedded_initramfs="$temp_dir/embedded-initramfs.cpio.gz"
 python3 "$repo_dir/scripts/nx769j/make-initramfs.py" \
   "$busybox_bin" "${ROOTFS_UUID:-ec0c73a6-b4f0-4310-b2fd-d100ff7be1f4}" \

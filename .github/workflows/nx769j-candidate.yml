@@ -38,7 +38,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential busybox-static clang cmake curl device-tree-compiler flex \
+            bc bison build-essential clang cmake curl device-tree-compiler flex \
             binutils-dev git kmod libbabeltrace-dev libcap-dev libdw-dev libelf-dev \
             liblzma-dev libslang2-dev libssl-dev libtraceevent-dev libtracefs-dev \
             libunwind-dev libzstd-dev lld llvm \
