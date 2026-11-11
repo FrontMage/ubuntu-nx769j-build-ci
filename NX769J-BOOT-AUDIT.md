@@ -73,9 +73,29 @@ The candidate's vendor load offsets were also aligned to the dumped
 stock `vendor_boot_b` header (base 0; kernel `0x8000`, ramdisk
 `0x01000000`, tags `0x100`, DTB `0x1f00000`).
 
-## Remaining gates before any device write
+## First device attempt 2026-11-11 (failed safe, fully recovered)
 
-- Download and authenticate an EDL package as a second recovery path.
+With the owner's explicit confirmation, `boot-candidate-04` was flashed
+to the inactive slot A only (`boot_a`, `init_boot_a`, `vendor_boot_a`),
+slot A was set active and the device rebooted. The candidate kernel
+crashed early into Qualcomm memory-dump mode (`19d2:0112 QUSB_BULK`)
+and never reached the initramfs: no USB gadget and no fastboot were
+observed, and volume-key fastboot entry did not work from that state.
+A host-issued Sahara reset with both volume keys held moved the device
+to true EDL (`05c6:9008`). The community SM8650 v1 firehose
+(`prog_ufs_firehose_sm8650_v1_ddr.elf`, SHA-256
+`01e4f38fd9ffff2056baffde8123ebe966feb6279f2be71bf831729ba66954d9`)
+read the GPT, set the active slot back to B, and stock Android booted
+(`boot_completed=1`, root intact). Slot A was then restored
+byte-identically from the local backup (post-restore hashes match the
+backup manifest). The early-crash cause is still unknown: the RAM
+console region was listed (52 minidump regions, about 4.4 MiB) but not
+captured before recovery, and no pstore records survived.
+
+## Remaining gates before any further device write
+
+- Capture and analyze the RAM console on the next failure (the Sahara
+  memory-debug listing path is proven; use it before recovery resets).
 - Decide rootfs placement (no partition is assigned today) and whether
   Android is retained, before any partition table or `super` change.
 - Observe how this bootloader merges vendor cmdline, selects DTB
