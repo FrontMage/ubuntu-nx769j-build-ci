@@ -41,6 +41,19 @@
 	};
 };
 
+&reserved_memory {
+	/* Same 2 MiB region as stock ramoops/RAMCON. */
+	ramoops: ramoops@d7e00000 {
+		compatible = "ramoops";
+		reg = <0x0 0xd7e00000 0x0 0x200000>;
+		record-size = <0x20000>;
+		console-size = <0x180000>;
+		ftrace-size = <0x0>;
+		pmsg-size = <0x0>;
+		ecc-size = <16>;
+	};
+};
+
 /* Supply IDs and voltage limits derived from the public NX769J stock DT. */
 &apps_rsc {
 	regulators-nx-b {
