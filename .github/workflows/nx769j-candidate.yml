@@ -40,7 +40,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential clang cmake curl device-tree-compiler flex \
             binutils-dev git kmod libbabeltrace-dev libcap-dev libdw-dev libelf-dev \
-            liblzma-dev libslang2-dev libssl-dev libunwind-dev libzstd-dev lld llvm \
+            liblzma-dev libslang2-dev libssl-dev libtraceevent-dev libtracefs-dev \
+            libunwind-dev libzstd-dev lld llvm \
             ninja-build pkg-config python3 python3-pip rsync xz-utils zlib1g-dev zstd
           sudo apt-get clean
       - name: Build untested NX769J kernel bundle
