@@ -165,7 +165,15 @@ a valid 127-byte gzip/newc stub, and the embedded config records
 built-in pstore RAM/console plus the generated initramfs source. The
 96 MiB image SHA-256 is
 `0f0c87229fce5c6132efd7d7ee51918a6fc512baf724bb13bb80151337a96932`.
-It has not been flashed.
+It was subsequently flashed only to inactive `boot_a` in a separate
+approved attempt. That attempt again reached Qualcomm memory-dump
+mode in about 28 seconds, before any initramfs USB gadget appeared.
+The mature Sahara client downloaded all requested regions without
+error, but the new RAMCON again contains no candidate `7.1.1-nx769j+`
+text. Embedded initramfs plus a 127-byte stub and Cerro header/cmdline
+values therefore do not move the failure observably later. Slot B
+Android was restored through the proven 9008 path, and slot A was
+again restored byte-identically from backup.
 
 ### Outcome of step 1 (2026-11-11)
 
