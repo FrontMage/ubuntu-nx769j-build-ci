@@ -165,7 +165,10 @@ a valid 127-byte gzip/newc stub, and the embedded config records
 built-in pstore RAM/console plus the generated initramfs source. The
 96 MiB image SHA-256 is
 `0f0c87229fce5c6132efd7d7ee51918a6fc512baf724bb13bb80151337a96932`.
-It was subsequently flashed only to inactive `boot_a` in a separate
+A RAM-only copy was first rejected by the current slot-B engineering
+ABL during `fastboot boot` (it returned to fastboot without leaving
+that USB session). The same aligned image was then flashed only to
+inactive `boot_a`, with `dtbo_a` zeroed, in a separate
 approved attempt. That attempt again reached Qualcomm memory-dump
 mode in about 28 seconds, before any initramfs USB gadget appeared.
 The mature Sahara client downloaded all requested regions without
