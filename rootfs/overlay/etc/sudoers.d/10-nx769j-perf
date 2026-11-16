@@ -1,0 +1,3 @@
+# Allow developer and wheel group to switch NX769J performance & fan profiles without password prompt
+developer ALL=(root) NOPASSWD: /usr/local/bin/nx769j-perf, /usr/local/bin/nx769j-fan
+%wheel ALL=(root) NOPASSWD: /usr/local/bin/nx769j-perf, /usr/local/bin/nx769j-fan

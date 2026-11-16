@@ -1,0 +1,5 @@
+## NX769J Mainland China High-Speed Arch Linux ARM Mirrors (50+ MB/s verified)
+Server = https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm/$arch/$repo
+Server = https://mirrors.ustc.edu.cn/archlinuxarm/$arch/$repo
+Server = https://mirrors.bfsu.edu.cn/archlinuxarm/$arch/$repo
+Server = http://os.archlinuxarm.org/$arch/$repo

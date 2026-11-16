@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "nx769j-fan",
+  "name": "性能与散热风扇",
+  "version": "2.0.0",
+  "author": "NX769J Omarchy Mobile",
+  "description": "RedMagic 9 Pro 3-mode performance switcher (省电 / 均衡 / 狂暴) with live SM8650 CPU/GPU °C & 25 kHz Turbo Fan RPM.",
+  "kinds": ["home-widget"],
+  "entryPoints": { "homeWidget": "Widget.qml" },
+  "homeWidget": {
+    "icon": "󰓅",
+    "size": [2, 1],
+    "min": [2, 1],
+    "max": [4, 2],
+    "capabilities": ["commands"],
+    "schema": [
+      { "key": "interval", "type": "integer", "label": "Refresh every (seconds)", "min": 3, "max": 60, "defaultValue": 5 }
+    ]
+  }
+}

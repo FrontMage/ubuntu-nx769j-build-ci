@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""Idempotent NX769J Omarchy Mobile Top-Bar & Touch-Gesture overlay applier.
+
+Invoked both during initial staging and automatically by ALPM PostTransaction
+hook `/etc/pacman.d/hooks/99-nx769j-omamobile-ui.hook` whenever `omamobile-shell`
+is installed or upgraded via `sudo pacman -Syu`.
+
+Strict ownership boundary:
+  - Updates ONLY `omamobile.bar`, `omamobile.back`, `omamobile.launcher`, and
+    `omamobile.switcher` under `/usr/share/omamobile/shell/plugins/`.
+  - NEVER touches `omamobile.quicksettings` or any perf/fan files.
+"""
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+OVERLAY_SUBDIR = "usr/local/share/nx769j-omamobile/plugins"
+TARGET_SUBDIR = "usr/share/omamobile/shell/plugins"
+
+
+def atomic_write_bytes(dest: str, data: bytes, mode: int = 0o644) -> bool:
+    if os.path.isfile(dest):
+        try:
+            with open(dest, "rb") as f:
+                if f.read() == data:
+                    return False
+        except OSError:
+            pass
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    tmp = dest + ".nx769j-tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(tmp, mode)
+    os.replace(tmp, dest)
+    return True
+
+
+def backup_once(path: str) -> None:
+    bak = path + ".nx769j-orig"
+    if os.path.isfile(path) and not os.path.exists(bak):
+        shutil.copy2(path, bak)
+
+
+def transform_back_qml(src: str) -> str:
+    # Widen side-edge Back strip from 14 -> 22 logical px (~3.5 mm) for NX769J's zero-bezel flat glass.
+    return re.sub(
+        r"(readonly\s+property\s+int\s+edge:\s*)14\b",
+        r"\g<1>22",
+        src,
+        count=1,
+    )
+
+
+def transform_back_model_js(src: str) -> str:
+    # Lower Back inward activation threshold 56 -> 40 logical px and tolerate natural diagonal thumb arc.
+    out = re.sub(r"(\bvar\s+THRESHOLD\s*=\s*)56\b", r"\g<1>40", src, count=1)
+    out = out.replace(
+        "return i >= t && Math.abs(Number(across) || 0) < i\n",
+        "return i >= t && Math.abs(Number(across) || 0) < i * 1.25\n",
+    )
+    return out
+
+
+def transform_launcher_qml(src: str) -> str:
+    out = src
+    # 1) Home dock upward flick to Switcher: -24 -> -18 logical px
+    out = out.replace(
+        "            else if (swipeY < -24)\n"
+        '              Quickshell.execDetached(["omarchy-shell", "shell", "summon", "omamobile.switcher", "{}"])',
+        "            else if (swipeY < -18)\n"
+        '              Quickshell.execDetached(["omarchy-shell", "shell", "summon", "omamobile.switcher", "{}"])',
+    )
+
+    # 2) HomeSwipe over an app: prevent subpixel motion from resetting the hold-for-Recents timer,
+    #    tune hold 350 -> 260 ms, direct Recents swipe -120 -> -92 px, Home flick -24 -> -20 px.
+    old_block = (
+        "    DragHandler {\n"
+        "      id: swipe\n"
+        "      target: null\n"
+        "      xAxis.enabled: false\n"
+        "      property real swipeY: 0\n"
+        "      property bool recents: false\n"
+        "      onActiveTranslationChanged: {\n"
+        "        swipeY = activeTranslation.y\n"
+        "        // Over the open drawer a swipe only closes it: recent apps from\n"
+        "        // there left the drawer half open over the next app.\n"
+        "        if (recents || root.opened) return\n"
+        "        if (swipeY < -120) {\n"
+        "          recents = true\n"
+        "          hold.stop()\n"
+        "          root.showRecents()\n"
+        "        } else if (swipeY < -24) {\n"
+        "          hold.restart()\n"
+        "        }\n"
+        "      }\n"
+        "      onActiveChanged: {\n"
+        "        if (active) { swipeY = 0; recents = false; return }\n"
+        "        hold.stop()\n"
+        '        console.log("omamobile-home-indicator: swipe", Math.round(swipeY), recents ? "recents" : "", "(" + swipeArea.strip + ")")\n'
+        "        if (!recents && swipeY < -24 && root.opened) {\n"
+        "          // Over the drawer (searching): the keyboard goes and the drawer\n"
+        "          // closes, back to the home screen.\n"
+        '          root.keyboardCall("hideKeyboard")\n'
+        "          root.dismiss(0)\n"
+        "        } else if (!recents && swipeY < -24 && !root.appOnScreen) {\n"
+        "          // On the home screen (the keyboard's strip, no app): the drawer\n"
+        "          // opens, as the dock's swipe does, and the keyboard goes.\n"
+        '          root.keyboardCall("hideKeyboard")\n'
+        "          root.expand()\n"
+        "        } else if (!recents && swipeY < -24) root.goHome()\n"
+        "      }\n"
+        "    }\n\n"
+        "    Timer {\n"
+        "      id: hold\n"
+        "      interval: 350\n"
+    )
+
+    new_block = (
+        "    DragHandler {\n"
+        "      id: swipe\n"
+        "      target: null\n"
+        "      xAxis.enabled: false\n"
+        "      property real swipeY: 0\n"
+        "      property real holdAnchorY: 0\n"
+        "      property bool recents: false\n"
+        "      onActiveTranslationChanged: {\n"
+        "        swipeY = activeTranslation.y\n"
+        "        // Over the open drawer a swipe only closes it: recent apps from\n"
+        "        // there left the drawer half open over the next app.\n"
+        "        if (recents || root.opened) return\n"
+        "        if (swipeY < -92) {\n"
+        "          recents = true\n"
+        "          hold.stop()\n"
+        "          root.showRecents()\n"
+        "        } else if (swipeY < -20) {\n"
+        "          if (!hold.running || Math.abs(swipeY - holdAnchorY) > 8) {\n"
+        "            holdAnchorY = swipeY\n"
+        "            hold.restart()\n"
+        "          }\n"
+        "        } else {\n"
+        "          hold.stop()\n"
+        "        }\n"
+        "      }\n"
+        "      onActiveChanged: {\n"
+        "        if (active) { swipeY = 0; holdAnchorY = 0; recents = false; return }\n"
+        "        hold.stop()\n"
+        '        console.log("omamobile-home-indicator: swipe", Math.round(swipeY), recents ? "recents" : "", "(" + swipeArea.strip + ")")\n'
+        "        if (!recents && swipeY < -20 && root.opened) {\n"
+        "          // Over the drawer (searching): the keyboard goes and the drawer\n"
+        "          // closes, back to the home screen.\n"
+        '          root.keyboardCall("hideKeyboard")\n'
+        "          root.dismiss(0)\n"
+        "        } else if (!recents && swipeY < -20 && !root.appOnScreen) {\n"
+        "          // On the home screen (the keyboard's strip, no app): the drawer\n"
+        "          // opens, as the dock's swipe does, and the keyboard goes.\n"
+        '          root.keyboardCall("hideKeyboard")\n'
+        "          root.expand()\n"
+        "        } else if (!recents && swipeY < -20) root.goHome()\n"
+        "      }\n"
+        "    }\n\n"
+        "    Timer {\n"
+        "      id: hold\n"
+        "      interval: 260\n"
+    )
+    if old_block in out:
+        out = out.replace(old_block, new_block, 1)
+    return out
+
+
+def transform_switcher_qml(src: str) -> str:
+    out = src
+    # 1) Register Switcher with BackLinkClient.qml so side-edge Back always steps out cleanly.
+    backlink_snippet = (
+        "  Loader {\n"
+        '    source: Qt.resolvedUrl("../omamobile.back/BackLinkClient.qml")\n'
+        "    onLoaded: {\n"
+        '      item.name = "recent apps"\n'
+        "      item.handler = function() {\n"
+        '        if (root.actionsOpen && root.actionPage === "pick") { root.actionPage = "menu"; return true }\n'
+        "        if (root.actionsOpen) { root.closeActions(); return true }\n"
+        "        if (root.opened) { root.dismiss(); return true }\n"
+        "        return false\n"
+        "      }\n"
+        "      item.active = Qt.binding(function() { return root.opened })\n"
+        "    }\n"
+        "  }\n\n"
+    )
+    anchor = "  PanelWindow {\n    id: overlay\n"
+    if "BackLinkClient.qml" not in out and anchor in out:
+        out = out.replace(anchor, backlink_snippet + anchor, 1)
+
+    # 2) Snappier upward flick-to-close threshold on Switcher cards (-0.25 -> -0.18).
+    out = out.replace("if (lift < -card.height * 0.25) {", "if (lift < -card.height * 0.18) {", 1)
+    return out
+
+
+def apply_all(root_dir: str, is_hook: bool = False) -> int:
+    root_dir = os.path.abspath(root_dir)
+    overlay_plugins = os.path.join(root_dir, OVERLAY_SUBDIR)
+    target_plugins = os.path.join(root_dir, TARGET_SUBDIR)
+
+    if not os.path.isdir(overlay_plugins) or not os.path.isdir(target_plugins):
+        return 0
+
+    changed = False
+
+    # 1. Install NX769J Zero-Cutout Top Bar files into omamobile.bar/
+    bar_src_dir = os.path.join(overlay_plugins, "omamobile.bar")
+    bar_dst_dir = os.path.join(target_plugins, "omamobile.bar")
+    if os.path.isdir(bar_src_dir) and os.path.isdir(bar_dst_dir):
+        backup_once(os.path.join(bar_dst_dir, "Bar.qml"))
+        for fname in ("Bar.qml", "BarAppsModel.js", "Readable.js"):
+            sp = os.path.join(bar_src_dir, fname)
+            dp = os.path.join(bar_dst_dir, fname)
+            if os.path.isfile(sp):
+                with open(sp, "rb") as f:
+                    if atomic_write_bytes(dp, f.read(), 0o644):
+                        changed = True
+
+    # 2. Apply surgical gesture tuning to omamobile.{back,launcher,switcher}
+    transforms = [
+        ("omamobile.back/Back.qml", transform_back_qml),
+        ("omamobile.back/BackModel.js", transform_back_model_js),
+        ("omamobile.launcher/Launcher.qml", transform_launcher_qml),
+        ("omamobile.switcher/Switcher.qml", transform_switcher_qml),
+    ]
+    for rel, fn in transforms:
+        tp = os.path.join(target_plugins, rel)
+        if not os.path.isfile(tp):
+            continue
+        backup_once(tp)
+        with open(tp, "r", encoding="utf-8") as f:
+            orig = f.read()
+        updated = fn(orig)
+        if updated != orig:
+            if atomic_write_bytes(tp, updated.encode("utf-8"), 0o644):
+                changed = True
+
+    # 3. When invoked from pacman PostTransaction hook on a live booted session,
+    #    schedule a non-blocking omarchy-restart-shell so upgraded QML loads cleanly.
+    if is_hook and changed and root_dir == "/" and os.path.isdir("/run/user/1000/hypr"):
+        restart_bin = "/usr/bin/omarchy-restart-shell"
+        if os.path.isfile(restart_bin) and os.access(restart_bin, os.X_OK):
+            subprocess.Popen(
+                [
+                    "/usr/bin/runuser",
+                    "-u",
+                    "developer",
+                    "--",
+                    "/usr/bin/env",
+                    "HOME=/home/developer",
+                    "XDG_RUNTIME_DIR=/run/user/1000",
+                    "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus",
+                    "OMARCHY_PATH=/usr/share/omarchy",
+                    restart_bin,
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Apply NX769J Omarchy Mobile Bar & Touch Gesture overlay.")
+    ap.add_argument("--root", default="/", help="Target filesystem root (default: /)")
+    ap.add_argument("--hook", action="store_true", help="Invoked from pacman PostTransaction hook")
+    args = ap.parse_args()
+    return apply_all(args.root, is_hook=args.hook)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

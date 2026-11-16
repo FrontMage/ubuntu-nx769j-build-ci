@@ -1,0 +1,12 @@
+[Unit]
+Description=NX769J Default Speaker Volume Initialization (80%)
+After=pipewire.service wireplumber.service pipewire-pulse.service
+PartOf=wireplumber.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/nx769j-volume-init
+
+[Install]
+WantedBy=wireplumber.service default.target

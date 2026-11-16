@@ -1,0 +1,45 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# nx769j-volume-init — Ensure PipeWire/WirePlumber default speaker sink starts
+# unmuted at a loud, clear 80% (0.80 = -5.82 dB) instead of WirePlumber's old
+# cached 40% (0.40 = -23.88 dB), while preserving subsequent user volume changes.
+set -eu
+
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/nx769j-audio"
+MARKER="$STATE_DIR/default-vol-80-v1"
+mkdir -p "$STATE_DIR"
+
+# Wait up to 15s for WirePlumber default sink to bind to platform-sound
+SINK_OK=0
+for _ in $(seq 1 60); do
+  if wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null | grep -q "alsa_output.platform-sound"; then
+    SINK_OK=1
+    break
+  fi
+  sleep 0.25
+done
+
+if [ "$SINK_OK" != "1" ]; then
+  exit 0
+fi
+
+VOL_LINE="$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || true)"
+# One-time migration from v20's cached 0.40 (-23.88 dB) default route state:
+if [ ! -f "$MARKER" ]; then
+  wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 2>/dev/null || true
+  wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.80 2>/dev/null || true
+  printf '0.80\n' > "$MARKER"
+  exit 0
+fi
+
+# Safety net if WirePlumber ever fell back to 0.40 alongside a fresh default-routes wipe
+case "$VOL_LINE" in
+  *"0.40"*)
+    if [ ! -s "${XDG_STATE_HOME:-$HOME/.local/state}/wireplumber/default-routes" ]; then
+      wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 2>/dev/null || true
+      wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.80 2>/dev/null || true
+    fi
+    ;;
+esac
+
+exit 0

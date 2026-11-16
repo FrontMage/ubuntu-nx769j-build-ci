@@ -1,0 +1,423 @@
+#!/usr/bin/env python3
+"""
+nx769j-sensor-proxy — D-Bus net.hadess.SensorProxy bridge for NX769J (SM8650).
+
+Connects to nx769j-imu-daemon's live UNIX stream (/run/nx769j-imu/stream.sock,
+with automatic fallback to /run/nx769j-imu/state.json) and exports the standard
+iio-sensor-proxy 3.8 D-Bus API on the system bus:
+  - Bus name : net.hadess.SensorProxy
+  - Object 1 : /net/hadess/SensorProxy          (net.hadess.SensorProxy)
+  - Object 2 : /net/hadess/SensorProxy/Compass  (net.hadess.SensorProxy.Compass)
+
+Verified compatible with:
+  - monitor-sensor (from iio-sensor-proxy 3.8)
+  - KDE Plasma 6 kwin_wayland automatic screen rotation
+  - gdbus / busctl introspection & property queries
+"""
+
+import json
+import os
+import signal
+import socket
+import sys
+from typing import Any, Dict, Optional, Set
+
+import gi
+gi.require_version("Gio", "2.0")
+gi.require_version("GLib", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+BUS_NAME = "net.hadess.SensorProxy"
+MAIN_PATH = "/net/hadess/SensorProxy"
+MAIN_IFACE = "net.hadess.SensorProxy"
+COMPASS_PATH = "/net/hadess/SensorProxy/Compass"
+COMPASS_IFACE = "net.hadess.SensorProxy.Compass"
+
+STATE_JSON_PATH = "/run/nx769j-imu/state.json"
+STREAM_SOCK_PATH = "/run/nx769j-imu/stream.sock"
+
+MAIN_XML = """
+<node>
+  <interface name="net.hadess.SensorProxy">
+    <property name="HasAccelerometer" type="b" access="read"/>
+    <property name="AccelerometerOrientation" type="s" access="read"/>
+    <property name="AccelerometerTilt" type="s" access="read"/>
+    <property name="HasAmbientLight" type="b" access="read"/>
+    <property name="LightLevelUnit" type="s" access="read"/>
+    <property name="LightLevel" type="d" access="read"/>
+    <property name="HasProximity" type="b" access="read"/>
+    <property name="ProximityNear" type="b" access="read"/>
+    <method name="ClaimAccelerometer"/>
+    <method name="ReleaseAccelerometer"/>
+    <method name="ClaimLight"/>
+    <method name="ReleaseLight"/>
+    <method name="ClaimProximity"/>
+    <method name="ReleaseProximity"/>
+  </interface>
+</node>
+"""
+
+COMPASS_XML = """
+<node>
+  <interface name="net.hadess.SensorProxy.Compass">
+    <property name="HasCompass" type="b" access="read"/>
+    <property name="CompassHeading" type="d" access="read"/>
+    <method name="ClaimCompass"/>
+    <method name="ReleaseCompass"/>
+  </interface>
+</node>
+"""
+
+
+class NX769JSensorProxy:
+    def __init__(self, loop: GLib.MainLoop) -> None:
+        self.loop = loop
+        self.conn: Optional[Gio.DBusConnection] = None
+        self.main_reg_id: int = 0
+        self.compass_reg_id: int = 0
+
+        self.has_accel: bool = False
+        self.orientation: str = "undefined"
+        self.tilt: str = "undefined"
+
+        self.accel_clients: Dict[str, int] = {}
+        self.light_clients: Set[str] = set()
+        self.prox_clients: Set[str] = set()
+        self.compass_clients: Set[str] = set()
+
+        self.stream_sock: Optional[socket.socket] = None
+        self.stream_watch_id: int = 0
+        self.stream_buf: bytes = b""
+
+        self.main_node = Gio.DBusNodeInfo.new_for_xml(MAIN_XML)
+        self.compass_node = Gio.DBusNodeInfo.new_for_xml(COMPASS_XML)
+
+        # Prime initial state before acquiring bus name so early callers see live state
+        self._poll_state_json(emit=False)
+
+        self.owner_id = Gio.bus_own_name(
+            Gio.BusType.SYSTEM,
+            BUS_NAME,
+            Gio.BusNameOwnerFlags.ALLOW_REPLACEMENT | Gio.BusNameOwnerFlags.REPLACE,
+            self._on_bus_acquired,
+            self._on_name_acquired,
+            self._on_name_lost,
+        )
+
+        # Maintain stream connection + periodic JSON fallback check every 500 ms
+        self._try_connect_stream()
+        GLib.timeout_add(500, self._periodic_tick)
+
+    def _variant_for_main_prop(self, prop: str) -> Optional[GLib.Variant]:
+        if prop == "HasAccelerometer":
+            return GLib.Variant("b", self.has_accel)
+        if prop == "AccelerometerOrientation":
+            return GLib.Variant("s", self.orientation)
+        if prop == "AccelerometerTilt":
+            return GLib.Variant("s", self.tilt)
+        if prop == "HasAmbientLight":
+            return GLib.Variant("b", False)
+        if prop == "LightLevelUnit":
+            return GLib.Variant("s", "lux")
+        if prop == "LightLevel":
+            return GLib.Variant("d", 0.0)
+        if prop == "HasProximity":
+            return GLib.Variant("b", False)
+        if prop == "ProximityNear":
+            return GLib.Variant("b", False)
+        return None
+
+    def _variant_for_compass_prop(self, prop: str) -> Optional[GLib.Variant]:
+        if prop == "HasCompass":
+            return GLib.Variant("b", False)
+        if prop == "CompassHeading":
+            return GLib.Variant("d", -1.0)
+        return None
+
+    def _emit_main_props_changed(self, changed: Dict[str, GLib.Variant]) -> None:
+        if not changed or self.conn is None:
+            return
+        try:
+            self.conn.emit_signal(
+                None,
+                MAIN_PATH,
+                "org.freedesktop.DBus.Properties",
+                "PropertiesChanged",
+                GLib.Variant("(sa{sv}as)", (MAIN_IFACE, changed, [])),
+            )
+        except Exception as exc:
+            sys.stderr.write(f"nx769j-sensor-proxy: emit_signal error: {exc}\n")
+
+    def _apply_imu_state(self, data: Dict[str, Any], emit: bool = True) -> None:
+        qsh_ok = bool(data.get("connected", data.get("qsh_connected", False)))
+        samples = int(data.get("accel_samples", 0))
+        new_has = qsh_ok and (samples > 0)
+        new_orient = str(data.get("orientation") or ("normal" if new_has else "undefined"))
+        new_tilt = str(data.get("tilt") or ("face-up" if new_has else "undefined"))
+        if not new_has:
+            new_orient = "undefined"
+            new_tilt = "undefined"
+
+        changed: Dict[str, GLib.Variant] = {}
+        if new_has != self.has_accel:
+            self.has_accel = new_has
+            changed["HasAccelerometer"] = GLib.Variant("b", self.has_accel)
+        if new_orient != self.orientation:
+            self.orientation = new_orient
+            changed["AccelerometerOrientation"] = GLib.Variant("s", self.orientation)
+        if new_tilt != self.tilt:
+            self.tilt = new_tilt
+            changed["AccelerometerTilt"] = GLib.Variant("s", self.tilt)
+
+        if emit and changed:
+            self._emit_main_props_changed(changed)
+
+    def _poll_state_json(self, emit: bool = True) -> None:
+        if not os.path.exists(STATE_JSON_PATH):
+            return
+        try:
+            with open(STATE_JSON_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                self._apply_imu_state(data, emit=emit)
+        except Exception:
+            pass
+
+    def _close_stream(self) -> None:
+        if self.stream_watch_id:
+            GLib.source_remove(self.stream_watch_id)
+            self.stream_watch_id = 0
+        if self.stream_sock is not None:
+            try:
+                self.stream_sock.close()
+            except Exception:
+                pass
+            self.stream_sock = None
+        self.stream_buf = b""
+
+    def _try_connect_stream(self) -> None:
+        if self.stream_sock is not None:
+            return
+        if not os.path.exists(STREAM_SOCK_PATH):
+            return
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.setblocking(False)
+            s.connect(STREAM_SOCK_PATH)
+            self.stream_sock = s
+            self.stream_buf = b""
+            self.stream_watch_id = GLib.io_add_watch(
+                s.fileno(),
+                GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR,
+                self._on_stream_io,
+            )
+        except Exception:
+            try:
+                s.close()  # type: ignore[misc]
+            except Exception:
+                pass
+
+    def _on_stream_io(self, _fd: int, cond: GLib.IOCondition) -> bool:
+        if cond & (GLib.IOCondition.HUP | GLib.IOCondition.ERR):
+            self._close_stream()
+            return False
+        if self.stream_sock is None:
+            return False
+        try:
+            chunk = self.stream_sock.recv(8192)
+        except BlockingIOError:
+            return True
+        except Exception:
+            self._close_stream()
+            return False
+        if not chunk:
+            self._close_stream()
+            return False
+
+        self.stream_buf += chunk
+        while b"\n" in self.stream_buf:
+            line, self.stream_buf = self.stream_buf.split(b"\n", 1)
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line.decode("utf-8", "replace"))
+            except Exception:
+                continue
+            if isinstance(obj, dict):
+                self._apply_imu_state(obj, emit=True)
+        return True
+
+    def _periodic_tick(self) -> bool:
+        if self.stream_sock is None:
+            self._try_connect_stream()
+            self._poll_state_json(emit=True)
+        return True
+
+    def _watch_client(self, sender: str) -> None:
+        if not sender or sender in self.accel_clients or self.conn is None:
+            return
+
+        def _vanished(_conn: Gio.DBusConnection, name: str) -> None:
+            wid = self.accel_clients.pop(name, 0)
+            if wid:
+                Gio.bus_unwatch_name(wid)
+
+        wid = Gio.bus_watch_name_on_connection(
+            self.conn,
+            sender,
+            Gio.BusNameWatcherFlags.NONE,
+            None,
+            _vanished,
+        )
+        self.accel_clients[sender] = wid
+
+    def _unwatch_client(self, sender: str) -> None:
+        wid = self.accel_clients.pop(sender, 0)
+        if wid:
+            Gio.bus_unwatch_name(wid)
+
+    def _on_main_method_call(
+        self,
+        _conn: Gio.DBusConnection,
+        sender: str,
+        _obj_path: str,
+        _iface_name: str,
+        method_name: str,
+        _params: GLib.Variant,
+        invocation: Gio.DBusMethodInvocation,
+    ) -> None:
+        if method_name == "ClaimAccelerometer":
+            self._watch_client(sender)
+            invocation.return_value(None)
+        elif method_name == "ReleaseAccelerometer":
+            self._unwatch_client(sender)
+            invocation.return_value(None)
+        elif method_name == "ClaimLight":
+            if sender:
+                self.light_clients.add(sender)
+            invocation.return_value(None)
+        elif method_name == "ReleaseLight":
+            self.light_clients.discard(sender)
+            invocation.return_value(None)
+        elif method_name == "ClaimProximity":
+            if sender:
+                self.prox_clients.add(sender)
+            invocation.return_value(None)
+        elif method_name == "ReleaseProximity":
+            self.prox_clients.discard(sender)
+            invocation.return_value(None)
+        else:
+            invocation.return_dbus_error(
+                "org.freedesktop.DBus.Error.UnknownMethod",
+                f"Unknown method {method_name}",
+            )
+
+    def _on_main_get_property(
+        self,
+        _conn: Gio.DBusConnection,
+        _sender: str,
+        _obj_path: str,
+        _iface_name: str,
+        prop_name: str,
+    ) -> Optional[GLib.Variant]:
+        return self._variant_for_main_prop(prop_name)
+
+    def _on_compass_method_call(
+        self,
+        _conn: Gio.DBusConnection,
+        sender: str,
+        _obj_path: str,
+        _iface_name: str,
+        method_name: str,
+        _params: GLib.Variant,
+        invocation: Gio.DBusMethodInvocation,
+    ) -> None:
+        if method_name == "ClaimCompass":
+            if sender:
+                self.compass_clients.add(sender)
+            invocation.return_value(None)
+        elif method_name == "ReleaseCompass":
+            self.compass_clients.discard(sender)
+            invocation.return_value(None)
+        else:
+            invocation.return_dbus_error(
+                "org.freedesktop.DBus.Error.UnknownMethod",
+                f"Unknown method {method_name}",
+            )
+
+    def _on_compass_get_property(
+        self,
+        _conn: Gio.DBusConnection,
+        _sender: str,
+        _obj_path: str,
+        _iface_name: str,
+        prop_name: str,
+    ) -> Optional[GLib.Variant]:
+        return self._variant_for_compass_prop(prop_name)
+
+    def _on_bus_acquired(self, conn: Gio.DBusConnection, _name: str) -> None:
+        self.conn = conn
+        self.main_reg_id = conn.register_object(
+            MAIN_PATH,
+            self.main_node.interfaces[0],
+            self._on_main_method_call,
+            self._on_main_get_property,
+            None,
+        )
+        self.compass_reg_id = conn.register_object(
+            COMPASS_PATH,
+            self.compass_node.interfaces[0],
+            self._on_compass_method_call,
+            self._on_compass_get_property,
+            None,
+        )
+
+    def _on_name_acquired(self, _conn: Gio.DBusConnection, name: str) -> None:
+        sys.stderr.write(
+            f"nx769j-sensor-proxy: acquired {name} (has_accel={self.has_accel}, "
+            f"orientation={self.orientation}, tilt={self.tilt})\n"
+        )
+        sys.stderr.flush()
+
+    def _on_name_lost(self, _conn: Optional[Gio.DBusConnection], name: str) -> None:
+        sys.stderr.write(f"nx769j-sensor-proxy: lost or failed to acquire {name}\n")
+        sys.stderr.flush()
+        self.loop.quit()
+
+    def shutdown(self) -> None:
+        self._close_stream()
+        for wid in list(self.accel_clients.values()):
+            if wid:
+                Gio.bus_unwatch_name(wid)
+        self.accel_clients.clear()
+        if self.conn is not None:
+            if self.main_reg_id:
+                self.conn.unregister_object(self.main_reg_id)
+                self.main_reg_id = 0
+            if self.compass_reg_id:
+                self.conn.unregister_object(self.compass_reg_id)
+                self.compass_reg_id = 0
+        if self.owner_id:
+            Gio.bus_unown_name(self.owner_id)
+            self.owner_id = 0
+
+
+def main() -> int:
+    loop = GLib.MainLoop()
+    svc = NX769JSensorProxy(loop)
+
+    def _handle_sig(_sig: int, _frame: Any) -> None:
+        GLib.idle_add(loop.quit)
+
+    signal.signal(signal.SIGINT, _handle_sig)
+    signal.signal(signal.SIGTERM, _handle_sig)
+    try:
+        loop.run()
+    finally:
+        svc.shutdown()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

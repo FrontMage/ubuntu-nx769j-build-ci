@@ -1,0 +1,13 @@
+[Unit]
+Description=NX769J USB ConfigFS NCM Gadget (10.42.0.2/24)
+After=systemd-modules-load.service local-fs.target
+Before=network-pre.target sshd.service ssh.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/nx769j-usb-gadget.sh
+
+[Install]
+WantedBy=multi-user.target

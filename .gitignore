@@ -1,0 +1,32 @@
+# Build & cache artifacts
+__pycache__/
+*.py[cod]
+*.o
+*.a
+*.so
+*.so.*
+out/
+build/
+cache/
+storage-dualboot/build/
+boot/cache/
+
+# Device-specific binaries, images, firmware blobs & keys
+*.img
+*.dtb
+*.cpio.gz
+*.extents
+*.tar.gz
+*.tar.zst
+*.deb
+*.ko
+u-boot.bin
+nx_dm_tool
+nx769j-slotctl
+*id_ed25519*
+*.nmconnection
+
+# Editor / OS junk
+.DS_Store
+*.swp
+*.swo

@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Launch Hyprland with Aquamarine's Wayland backend connected to nx769j-fb-wl
+# and Adreno 750 (/dev/dri/renderD128) Freedreno/Turnip hardware rendering.
+# Hyprland immediately replaces WAYLAND_DISPLAY in its own environment with
+# its newly created server socket (wayland-1) before spawning child clients.
+set -euo pipefail
+
+WL_SOCK="${NX769J_WL_SOCKET:-/run/nx769j-wl/wayland-fb0}"
+if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "${XDG_RUNTIME_DIR}" ]]; then
+  ln -sfn "$WL_SOCK" "${XDG_RUNTIME_DIR}/wayland-fb0"
+fi
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:${PATH:-}"
+export AQ_BACKEND=wayland
+if [[ -e /dev/dri/renderD128 ]]; then
+  export AQ_DRM_DEVICES=/dev/dri/renderD128
+fi
+export WAYLAND_DISPLAY="$WL_SOCK"
+
+exec /usr/bin/start-hyprland "$@"

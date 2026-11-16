@@ -1,0 +1,30 @@
+[Unit]
+Description=Omarchy Mobile Desktop Session on NX769J (Adreno 750 + nx769j-fb-wl)
+After=systemd-user-sessions.service systemd-logind.service dbus.service nx769j-fb-wl.service nx769j-sensor-proxy.service
+Wants=nx769j-fb-wl.service
+Conflicts=getty@tty1.service sddm.service
+
+[Service]
+Type=simple
+User=developer
+Group=developer
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+WorkingDirectory=/home/developer
+Environment=HOME=/home/developer
+Environment=USER=developer
+Environment=LOGNAME=developer
+Environment=XDG_SEAT=seat0
+Environment=XDG_VTNR=1
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/bin
+ExecStart=/usr/local/bin/nx769j-start-omamobile
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

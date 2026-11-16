@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""NX769J AMOLED software-brightness wrapper for brightnessctl.
+
+Delegates --class=backlight / -d nx769j_amoled (and default invocations when
+/sys/class/backlight is empty) to nx769j-fb-wl's /run/nx769j-wl/power.sock
+lossless shadow-buffer dimmer (1..100%), while passing LED/torch/other devices
+straight through to /usr/bin/brightnessctl.
+"""
+import os
+import re
+import socket
+import sys
+
+REAL_BIN = os.environ.get("NX769J_REAL_BRIGHTNESSCTL", "/usr/bin/brightnessctl")
+POWER_SOCK = os.environ.get("NX769J_FB_POWER_SOCK", "/run/nx769j-wl/power.sock")
+BACKLIGHT_SYSFS = os.environ.get("NX769J_BACKLIGHT_SYSFS", "/sys/class/backlight")
+DEV_NAME = "nx769j_amoled"
+
+
+def has_kernel_backlight() -> bool:
+    try:
+        return any(not e.startswith(".") for e in os.listdir(BACKLIGHT_SYSFS))
+    except OSError:
+        return False
+
+
+def sock_cmd(cmd: str) -> str:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        s.settimeout(1.5)
+        s.connect(POWER_SOCK)
+        s.sendall((cmd.strip() + "\n").encode("utf-8"))
+        chunks = []
+        while True:
+            data = s.recv(256)
+            if not data:
+                break
+            chunks.append(data)
+            if b"\n" in data:
+                break
+    return b"".join(chunks).decode("utf-8", errors="replace").strip()
+
+
+def parse_brightness(resp: str) -> int:
+    m = re.search(r"\bbrightness=(\d+)\b", resp)
+    return max(1, min(100, int(m.group(1)))) if m else 100
+
+
+def delegate_real():
+    if os.path.exists(REAL_BIN) and os.path.abspath(REAL_BIN) != os.path.abspath(__file__):
+        os.execv(REAL_BIN, [REAL_BIN] + sys.argv[1:])
+    sys.stderr.write("brightnessctl: device not found\n")
+    sys.exit(1)
+
+
+def main() -> int:
+    args = sys.argv[1:]
+    cls = ""
+    dev = ""
+    machine = False
+    quiet = False
+    list_devs = False
+    pos = []
+
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-m", "--machine-readable"):
+            machine = True
+        elif a in ("-q", "--quiet"):
+            quiet = True
+        elif a in ("-l", "--list"):
+            list_devs = True
+        elif a.startswith("--class="):
+            cls = a.split("=", 1)[1]
+        elif a in ("-c", "--class") and i + 1 < len(args):
+            i += 1
+            cls = args[i]
+        elif a.startswith("--device="):
+            dev = a.split("=", 1)[1]
+        elif a in ("-d", "--device") and i + 1 < len(args):
+            i += 1
+            dev = args[i]
+        elif a in ("-h", "--help", "-V", "--version"):
+            delegate_real()
+        elif a.startswith("-"):
+            # Unknown flag -> delegate if possible
+            delegate_real()
+        else:
+            pos.append(a)
+        i += 1
+
+    use_amoled = (
+        os.path.exists(POWER_SOCK)
+        and (dev == DEV_NAME or (dev == "" and cls in ("", "backlight") and not has_kernel_backlight()))
+    )
+    if not use_amoled:
+        delegate_real()
+
+    try:
+        cur = parse_brightness(sock_cmd("STATUS"))
+    except OSError as exc:
+        sys.stderr.write(f"brightnessctl: {exc}\n")
+        return 1
+
+    if list_devs:
+        if machine:
+            print(f"{DEV_NAME},backlight,{cur},{cur}%,100")
+        else:
+            print(f"Device '{DEV_NAME}' of class 'backlight':\n\tCurrent brightness: {cur} ({cur}%)\n\tMax brightness: 100")
+        return 0
+
+    op = pos[0] if pos else "info"
+    if op in ("g", "get"):
+        print(cur)
+        return 0
+    if op in ("m", "max"):
+        print(100)
+        return 0
+    if op in ("s", "set"):
+        if len(pos) < 2:
+            sys.stderr.write("brightnessctl: set requires a value\n")
+            return 1
+        raw = pos[1].strip()
+        target = cur
+        if raw.startswith("+"):
+            delta = int(raw[1:].rstrip("%") or "0")
+            target = cur + delta
+        elif raw.endswith("-"):
+            delta = int(raw[:-1].rstrip("%") or "0")
+            target = cur - delta
+        elif raw.endswith("%") and raw.startswith("-"):
+            delta = int(raw[1:-1] or "0")
+            target = cur - delta
+        else:
+            target = int(raw.rstrip("%"))
+        target = max(1, min(100, target))
+        try:
+            cur = parse_brightness(sock_cmd(f"BRIGHTNESS {target}"))
+        except OSError as exc:
+            sys.stderr.write(f"brightnessctl: {exc}\n")
+            return 1
+        if quiet and not machine:
+            return 0
+
+    if machine:
+        print(f"{DEV_NAME},backlight,{cur},{cur}%,100")
+    elif not quiet:
+        print(
+            f"Updated device '{DEV_NAME}':\n"
+            f"Device '{DEV_NAME}' of class 'backlight':\n"
+            f"\tCurrent brightness: {cur} ({cur}%)\n"
+            f"\tMax brightness: 100"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

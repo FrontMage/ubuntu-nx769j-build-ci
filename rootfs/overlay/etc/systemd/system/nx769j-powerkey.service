@@ -1,0 +1,15 @@
+[Unit]
+Description=NX769J Power Button Standby & Shutdown Daemon (pmic_pwrkey)
+After=systemd-udevd.service nx769j-fb-wl.service
+Wants=nx769j-fb-wl.service
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/modprobe cpufreq_powersave
+ExecStart=/usr/local/sbin/nx769j-powerkey
+Restart=always
+RestartSec=1
+OOMScoreAdjust=-500
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,3 @@
+# /etc/fstab — NX769J Omarchy Mobile (100 GiB dm-linear ext4 over UFS userdata free extents)
+/dev/nxroot  /     ext4  defaults,noatime,errors=remount-ro  0 1
+/swapfile    none  swap  sw                                  0 0

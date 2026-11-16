@@ -1,0 +1,18 @@
+[Unit]
+Description=FastRPC reverse-tunnel daemon for SM8650 ADSP Sensors PD (NX769J)
+After=hexagonrpcd-rootpd.service
+Wants=hexagonrpcd-rootpd.service
+ConditionPathExists=/dev/fastrpc-adsp
+
+[Service]
+Type=simple
+RuntimeDirectory=nx769j-fastrpc
+RuntimeDirectoryPreserve=yes
+ExecStartPre=/usr/bin/mkdir -p /run/nx769j-fastrpc/persist_sensors
+ExecStartPre=/bin/sh -c "[ -f /run/nx769j-fastrpc/persist_sensors/.staged ] || (cp -a /usr/share/qcom/sm8650/nubia/nx769j/persist_sensors/. /run/nx769j-fastrpc/persist_sensors/ && touch /run/nx769j-fastrpc/persist_sensors/.staged)"
+ExecStart=/usr/local/libexec/nx769j-hexagonrpcd -f /dev/fastrpc-adsp -d adsp -s -R /usr/share/qcom/sm8650/nubia/nx769j -W /run/nx769j-fastrpc/persist_sensors
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

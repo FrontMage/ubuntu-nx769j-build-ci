@@ -1,0 +1,4 @@
+# NX769J Smart Battery Charge-Control Configuration (SM8650 ADSP battman opcode 0x48)
+ENABLED=1
+CHARGE_END_THRESHOLD=85
+CHARGE_START_THRESHOLD=80

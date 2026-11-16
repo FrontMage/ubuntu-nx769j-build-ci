@@ -1,0 +1,6 @@
+# NX769J SM8650 ADSP FastRPC + LSM6DSO 6-Axis IMU udev rules
+SUBSYSTEM=="misc", KERNEL=="fastrpc-adsp*", OWNER="fastrpc", GROUP="fastrpc", MODE="0660", TAG+="systemd", ENV{SYSTEMD_WANTS}+="hexagonrpcd.service hexagonrpcd-rootpd.service"
+
+# Match both systemd-udevd unescaped KERNEL=="input/event*" and legacy KERNEL=="input!event*"
+SUBSYSTEM=="cuse", KERNEL=="input/event*", MODE="0664", GROUP="input", ENV{ID_INPUT}="1", ENV{ID_INPUT_ACCELEROMETER}="1", ENV{LIBINPUT_IGNORE_DEVICE}="1", SYMLINK+="input/by-id/platform-nx769j-lsm6dso-imu-event"
+SUBSYSTEM=="cuse", KERNEL=="input!event*", MODE="0664", GROUP="input", ENV{ID_INPUT}="1", ENV{ID_INPUT_ACCELEROMETER}="1", ENV{LIBINPUT_IGNORE_DEVICE}="1", SYMLINK+="input/by-id/platform-nx769j-lsm6dso-imu-event"

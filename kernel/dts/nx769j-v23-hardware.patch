@@ -1,0 +1,1026 @@
+--- a/nx769j-base.dts
++++ b/nx769j-linux.dts
+@@ -10,7 +10,91 @@
+ 	qcom,board-id = <0x08 0x00>;
+ 	chassis-type = "handset";
+ 
++	aliases {
++		serial0 = "/soc@0/geniqup@8c0000/serial@898000";
++	};
++
+ 	chosen {
++		bootargs = "earlycon=efifb console=tty0 vt.global_cursor_default=0 loglevel=4 pd_ignore_unused clk_ignore_unused regulator_ignore_unused plymouth.enable=0 systemd.unit=multi-user.target arm-smmu.disable_bypass=0 msm.separate_gpu_kms=1 efi=novamap log_buf_len=2M panic=5 rw";
++	};
++
++	smmu-splash-keepalive {
++		compatible = "nx769j,smmu-splash-keepalive";
++		interconnects = <0xcb 0x03 0x07 0x08 0x01 0x07 0x07 0x03 0x03 0x4e 0x0d 0x03>;
++		interconnect-names = "mdp0-mem", "cpu-cfg";
++		power-domains = <0x4f 0x06>;
++		clocks = <0x4c 0x0f>;
++		status = "okay";
++	};
++
++	ts-vddio-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "ts_vddio_1v8";
++		regulator-min-microvolt = <0x1b7740>;
++		regulator-max-microvolt = <0x1b7740>;
++		gpio = <0x99 0x1c 0x00>;
++		enable-active-high;
++		regulator-boot-on;
++		phandle = <0x202>;
++	};
++
++	wcn7850-pmu {
++		compatible = "qcom,wcn7850-pmu";
++		pinctrl-names = "default";
++		pinctrl-0 = <0x216>;
++		wlan-enable-gpios = <0x99 0x10 0x00>;
++		bt-enable-gpios = <0x99 0x11 0x00>;
++		vdd-supply = <0x213>;
++		vddio-supply = <0xec>;
++		vddio1p2-supply = <0x212>;
++		vddaon-supply = <0x211>;
++		vdddig-supply = <0x104>;
++		vddrfa1p2-supply = <0x103>;
++		vddrfa1p8-supply = <0x101>;
++		clocks = <0x02 0x06>;
++
++		regulators {
++			ldo0 {
++				regulator-name = "vreg_pmu_rfa_cmn";
++				phandle = <0x220>;
++			};
++			ldo1 {
++				regulator-name = "vreg_pmu_aon_0p59";
++				phandle = <0x217>;
++			};
++			ldo2 {
++				regulator-name = "vreg_pmu_wlcx_0p8";
++				phandle = <0x221>;
++			};
++			ldo3 {
++				regulator-name = "vreg_pmu_wlmx_0p85";
++				phandle = <0x222>;
++			};
++			ldo4 {
++				regulator-name = "vreg_pmu_btcmx_0p85";
++				phandle = <0x223>;
++			};
++			ldo5 {
++				regulator-name = "vreg_pmu_rfa_0p8";
++				phandle = <0x224>;
++			};
++			ldo6 {
++				regulator-name = "vreg_pmu_rfa_1p2";
++				phandle = <0x225>;
++			};
++			ldo7 {
++				regulator-name = "vreg_pmu_rfa_1p8";
++				phandle = <0x226>;
++			};
++			ldo8 {
++				regulator-name = "vreg_pmu_pcie_0p9";
++				phandle = <0x227>;
++			};
++			ldo9 {
++				regulator-name = "vreg_pmu_pcie_1p8";
++				phandle = <0x228>;
++			};
++		};
+ 	};
+ 
+ 	clocks {
+@@ -25,6 +109,7 @@
+ 		sleep-clk {
+ 			compatible = "fixed-clock";
+ 			#clock-cells = <0x00>;
++			clock-frequency = <0x7ffc>;
+ 			phandle = <0x46>;
+ 		};
+ 
+@@ -658,9 +743,9 @@
+ 		};
+ 	};
+ 
+-	memory@a0000000 {
++	memory@a2000000 {
+ 		device_type = "memory";
+-		reg = <0x00 0xa0000000 0x00 0x00>;
++		reg = <0x00 0xa2000000 0x00 0x35c00000 0x08 0xc0000000 0x02 0x3e000000 0x0b 0x00000000 0x01 0x00000000>;
+ 	};
+ 
+ 	opp-table-cpu0 {
+@@ -1776,10 +1861,11 @@
+ 
+ 		rmtfs@d7c00000 {
+ 			compatible = "qcom,rmtfs-mem";
+-			reg = <0x00 0xd7c00000 0x00 0x400000>;
++			reg = <0x00 0xd7c00000 0x00 0x200000>;
+ 			no-map;
+ 			qcom,client-id = <0x01>;
+ 			qcom,vmid = <0x0f>;
++			status = "disabled";
+ 		};
+ 
+ 		tz-merged@d8000000 {
+@@ -1942,12 +2028,14 @@
+ 			reg = <0x00 0x8c0000 0x00 0x2000>;
+ 			clocks = <0x4c 0x90 0x4c 0x91>;
+ 			clock-names = "m-ahb", "s-ahb";
++			interconnects = <0x4d 0x02 0x07 0x4d 0x05 0x07>;
++			interconnect-names = "qup-core";
+ 			iommus = <0x4b 0x423 0x00>;
+ 			dma-coherent;
+ 			#address-cells = <0x02>;
+ 			#size-cells = <0x02>;
+ 			ranges;
+-			status = "disabled";
++			status = "okay";
+ 
+ 			i2c@880000 {
+ 				compatible = "qcom,geni-i2c";
+@@ -2189,7 +2277,21 @@
+ 				operating-points-v2 = <0x65>;
+ 				pinctrl-0 = <0x66 0x67>;
+ 				pinctrl-names = "default";
+-				status = "disabled";
++				status = "okay";
++
++				bluetooth {
++					compatible = "qcom,wcn7850-bt";
++					vddaon-supply = <0x217>;
++					vddbtcmx-supply = <0x223>;
++					vddwlcx-supply = <0x221>;
++					vddwlmx-supply = <0x222>;
++					vddrfacmn-supply = <0x220>;
++					vddrfa0p8-supply = <0x224>;
++					vddrfa1p2-supply = <0x225>;
++					vddrfa1p8-supply = <0x226>;
++					max-speed = <0x30d400>;
++					local-bd-address = [ 01 9a 76 00 00 02 ];
++				};
+ 			};
+ 
+ 			serial@89c000 {
+@@ -2216,7 +2318,7 @@
+ 			#address-cells = <0x02>;
+ 			#size-cells = <0x02>;
+ 			ranges;
+-			status = "disabled";
++			status = "okay";
+ 
+ 			i2c@980000 {
+ 				compatible = "qcom,geni-i2c-master-hub";
+@@ -2281,9 +2383,10 @@
+ 				required-opps = <0x37>;
+ 				pinctrl-0 = <0x6c>;
+ 				pinctrl-names = "default";
++				clock-frequency = <0x61a80>;
+ 				#address-cells = <0x01>;
+ 				#size-cells = <0x00>;
+-				status = "disabled";
++				status = "okay";
+ 			};
+ 
+ 			i2c@990000 {
+@@ -2398,7 +2501,7 @@
+ 			#dma-cells = <0x03>;
+ 			iommus = <0x4b 0xb6 0x00>;
+ 			dma-coherent;
+-			status = "disabled";
++			status = "okay";
+ 			phandle = <0x74>;
+ 		};
+ 
+@@ -2414,7 +2517,7 @@
+ 			#address-cells = <0x02>;
+ 			#size-cells = <0x02>;
+ 			ranges;
+-			status = "disabled";
++			status = "okay";
+ 
+ 			i2c@a80000 {
+ 				compatible = "qcom,geni-i2c";
+@@ -2603,7 +2706,21 @@
+ 				pinctrl-names = "default";
+ 				#address-cells = <0x01>;
+ 				#size-cells = <0x00>;
+-				status = "disabled";
++				status = "okay";
++
++				touchscreen@0 {
++					compatible = "goodix,gt9916";
++					reg = <0x00>;
++					interrupts-extended = <0x99 0xa2 0x02>;
++					reset-gpios = <0x99 0xa1 0x01>;
++					avdd-supply = <0x201>;
++					vddio-supply = <0x202>;
++					pinctrl-0 = <0x203>;
++					pinctrl-names = "default";
++					touchscreen-size-x = <0x45c0>;
++					touchscreen-size-y = <0x9b00>;
++					spi-max-frequency = <0x4c4b40>;
++				};
+ 			};
+ 
+ 			i2c@a94000 {
+@@ -2814,7 +2931,11 @@
+ 			#size-cells = <0x02>;
+ 			ranges = <0x1000000 0x00 0x00 0x00 0x60200000 0x00 0x100000 0x2000000 0x00 0x60300000 0x00 0x60300000 0x00 0x3d00000>;
+ 			dma-coherent;
+-			status = "disabled";
++			perst-gpios = <0x99 0x5e 0x01>;
++			wake-gpios = <0x99 0x60 0x01>;
++			pinctrl-0 = <0x215>;
++			pinctrl-names = "default";
++			status = "okay";
+ 
+ 			opp-table {
+ 				compatible = "operating-points-v2";
+@@ -2870,6 +2991,20 @@
+ 				#address-cells = <0x03>;
+ 				#size-cells = <0x02>;
+ 				ranges;
++
++				wifi@0 {
++					compatible = "pci17cb,1107";
++					reg = <0x10000 0x00 0x00 0x00 0x00>;
++					vddrfacmn-supply = <0x220>;
++					vddaon-supply = <0x217>;
++					vddwlcx-supply = <0x221>;
++					vddwlmx-supply = <0x222>;
++					vddrfa0p8-supply = <0x224>;
++					vddrfa1p2-supply = <0x225>;
++					vddrfa1p8-supply = <0x226>;
++					vddpcie0p9-supply = <0x227>;
++					vddpcie1p8-supply = <0x228>;
++				};
+ 			};
+ 		};
+ 
+@@ -2883,10 +3018,12 @@
+ 			resets = <0x4c 0x06>;
+ 			reset-names = "phy";
+ 			power-domains = <0x4c 0x01>;
++			vdda-phy-supply = <0xc2>;
++			vdda-pll-supply = <0x96>;
+ 			#clock-cells = <0x00>;
+ 			clock-output-names = "pcie0_pipe_clk";
+ 			#phy-cells = <0x00>;
+-			status = "disabled";
++			status = "okay";
+ 			phandle = <0x47>;
+ 		};
+ 
+@@ -3044,7 +3181,6 @@
+ 			iommus = <0x4b 0x60 0x00>;
+ 			dma-coherent;
+ 			lanes-per-direction = <0x02>;
+-			qcom,ice = <0x98>;
+ 			phys = <0x49>;
+ 			phy-names = "ufsphy";
+ 			#reset-cells = <0x01>;
+@@ -3134,11 +3270,12 @@
+ 			#cooling-cells = <0x02>;
+ 			interconnects = <0x07 0x04 0x07 0x08 0x01 0x07>;
+ 			interconnect-names = "gfx-mem";
+-			status = "disabled";
++			status = "okay";
+ 			phandle = <0x111>;
+ 
+ 			zap-shader {
+ 				memory-region = <0xa0>;
++				firmware-name = "qcom/sm8650/nubia/nx769j/gen70900_zap.mbn";
+ 			};
+ 
+ 			opp-table {
+@@ -3334,7 +3471,8 @@
+ 			qcom,qmp = <0xa2>;
+ 			qcom,smem-states = <0xb3 0x00>;
+ 			qcom,smem-state-names = "stop";
+-			status = "disabled";
++			firmware-name = "qcom/sm8650/nubia/nx769j/adsp.mdt", "qcom/sm8650/nubia/nx769j/adsp_dtb.mdt";
++			status = "okay";
+ 
+ 			glink-edge {
+ 				interrupts-extended = <0x43 0x03 0x00 0x01>;
+@@ -3399,10 +3537,12 @@
+ 						reg = <0x01>;
+ 						#sound-dai-cells = <0x00>;
+ 						qcom,protection-domain = "avs/audio", "msm/adsp/audio_pd";
++						phandle = <0x256>;
+ 
+ 						bedais {
+ 							compatible = "qcom,q6apm-lpass-dais";
+ 							#sound-dai-cells = <0x01>;
++							phandle = <0x257>;
+ 						};
+ 
+ 						dais {
+@@ -3434,6 +3574,7 @@
+ 			#clock-cells = <0x00>;
+ 			clock-output-names = "wsa2-mclk";
+ 			#sound-dai-cells = <0x01>;
++			status = "disabled";
+ 			phandle = <0xb6>;
+ 		};
+ 
+@@ -3483,21 +3624,29 @@
+ 			label = "RX";
+ 			pinctrl-0 = <0xb9>;
+ 			pinctrl-names = "default";
+-			qcom,din-ports = <0x00>;
++			qcom,din-ports = <0x01>;
+ 			qcom,dout-ports = <0x0b>;
+-			qcom,ports-sinterval = [00 03 00 1f 00 1f 00 07 00 03 00 ff 00 ff 00 31 00 ff 00 ff 00 ff];
+-			qcom,ports-offset1 = [00 00 0b 09 01 ff ff 00 ff ff ff];
+-			qcom,ports-offset2 = [00 00 0b 00 00 ff ff 00 ff ff ff];
+-			qcom,ports-hstart = [ff 03 ff ff ff ff ff 00 ff ff ff];
+-			qcom,ports-hstop = [ff 06 ff ff ff ff ff 0f ff ff ff];
+-			qcom,ports-word-length = [01 07 04 ff ff ff ff 18 ff ff ff];
+-			qcom,ports-block-pack-mode = [ff 00 01 ff ff ff ff 01 ff ff ff];
+-			qcom,ports-block-group-count = [ff ff ff 01 03 ff ff 00 ff ff ff];
+-			qcom,ports-lane-control = [01 00 00 00 00 ff ff 01 ff ff ff];
++			qcom,ports-sinterval = [00 03 00 1f 00 1f 00 07 00 03 00 ff 00 ff 00 31 00 ff 00 ff 00 ff 00 ff];
++			qcom,ports-offset1 = [00 00 0b 09 01 ff ff 00 ff ff ff ff];
++			qcom,ports-offset2 = [00 00 0b 00 00 ff ff 00 ff ff ff ff];
++			qcom,ports-hstart = [ff 03 ff ff ff ff ff 00 ff ff ff ff];
++			qcom,ports-hstop = [ff 06 ff ff ff ff ff 0f ff ff ff ff];
++			qcom,ports-word-length = [01 07 04 ff ff ff ff 18 ff ff ff ff];
++			qcom,ports-block-pack-mode = [ff 00 01 ff ff ff ff 01 ff ff ff ff];
++			qcom,ports-block-group-count = [ff ff ff 01 03 ff ff 00 ff ff ff ff];
++			qcom,ports-lane-control = [01 00 00 00 00 ff ff 01 ff ff ff ff];
+ 			#address-cells = <0x02>;
+ 			#size-cells = <0x00>;
+ 			#sound-dai-cells = <0x01>;
+-			status = "disabled";
++			status = "okay";
++			phandle = <0x258>;
++
++			codec@0,4 {
++				compatible = "sdw20217010e00";
++				reg = <0x00 0x04>;
++				qcom,rx-port-mapping = <0x01 0x02 0x03 0x04 0x05 0x09>;
++				phandle = <0x251>;
++			};
+ 		};
+ 
+ 		codec@6ae0000 {
+@@ -3519,6 +3668,7 @@
+ 			#clock-cells = <0x00>;
+ 			clock-output-names = "mclk";
+ 			#sound-dai-cells = <0x01>;
++			status = "disabled";
+ 			phandle = <0xba>;
+ 		};
+ 
+@@ -3559,20 +3709,28 @@
+ 			pinctrl-0 = <0xbd>;
+ 			pinctrl-names = "default";
+ 			qcom,din-ports = <0x04>;
+-			qcom,dout-ports = <0x00>;
+-			qcom,ports-sinterval-low = <0x1010303>;
+-			qcom,ports-offset1 = <0x101>;
+-			qcom,ports-offset2 = <0x00>;
+-			qcom,ports-hstart = <0xffffffff>;
+-			qcom,ports-hstop = <0xffffffff>;
+-			qcom,ports-word-length = <0xffffffff>;
+-			qcom,ports-block-pack-mode = <0xffffffff>;
+-			qcom,ports-block-group-count = <0xffffffff>;
+-			qcom,ports-lane-control = <0x1020000>;
++			qcom,dout-ports = <0x01>;
++			qcom,ports-sinterval-low = [00 01 01 03 03];
++			qcom,ports-offset1 = [00 00 00 01 01];
++			qcom,ports-offset2 = [00 00 00 00 00];
++			qcom,ports-hstart = [ff ff ff ff ff];
++			qcom,ports-hstop = [ff ff ff ff ff];
++			qcom,ports-word-length = [ff ff ff ff ff];
++			qcom,ports-block-pack-mode = [ff ff ff ff ff];
++			qcom,ports-block-group-count = [ff ff ff ff ff];
++			qcom,ports-lane-control = [ff 01 02 00 00];
+ 			#address-cells = <0x02>;
+ 			#size-cells = <0x00>;
+ 			#sound-dai-cells = <0x01>;
+-			status = "disabled";
++			status = "okay";
++			phandle = <0x259>;
++
++			codec@0,3 {
++				compatible = "sdw20217010e00";
++				reg = <0x00 0x03>;
++				qcom,tx-port-mapping = <0x02 0x02 0x04 0x05>;
++				phandle = <0x252>;
++			};
+ 		};
+ 
+ 		codec@6d44000 {
+@@ -3583,6 +3741,7 @@
+ 			#clock-cells = <0x00>;
+ 			clock-output-names = "fsgen";
+ 			#sound-dai-cells = <0x01>;
++			qcom,dmic-sample-rate = <0x249f00>;
+ 			phandle = <0xb5>;
+ 		};
+ 
+@@ -3803,7 +3962,7 @@
+ 			#phy-cells = <0x01>;
+ 			mode-switch;
+ 			orientation-switch;
+-			status = "okay";
++			status = "disabled";
+ 			vdda-phy-supply = <0x96>;
+ 			vdda-pll-supply = <0xc4>;
+ 			phandle = <0x4a>;
+@@ -3823,7 +3982,6 @@
+ 					reg = <0x01>;
+ 
+ 					endpoint {
+-						remote-endpoint = <0xc5>;
+ 						phandle = <0xc8>;
+ 					};
+ 				};
+@@ -3849,8 +4007,9 @@
+ 			assigned-clocks = <0x4c 0xaf 0x4c 0xad>;
+ 			assigned-clock-rates = <0x124f800 0xbebc200>;
+ 			resets = <0x4c 0x1a>;
+-			phys = <0xc7 0x4a 0x00>;
+-			phy-names = "usb2-phy", "usb3-phy";
++			phys = <0xc7>;
++			phy-names = "usb2-phy";
++			maximum-speed = "high-speed";
+ 			interconnects = <0x73 0x05 0x07 0x08 0x01 0x07 0x07 0x03 0x03 0x4e 0x26 0x03>;
+ 			interconnect-names = "usb-ddr", "apps-usb";
+ 			iommus = <0x4b 0x40 0x00>;
+@@ -3870,27 +4029,6 @@
+ 			dma-coherent;
+ 			status = "okay";
+ 			dr_mode = "peripheral";
+-
+-			ports {
+-				#address-cells = <0x01>;
+-				#size-cells = <0x00>;
+-
+-				port@0 {
+-					reg = <0x00>;
+-
+-					endpoint {
+-					};
+-				};
+-
+-				port@1 {
+-					reg = <0x01>;
+-
+-					endpoint {
+-						remote-endpoint = <0xc8>;
+-						phandle = <0xc5>;
+-					};
+-				};
+-			};
+ 		};
+ 
+ 		video-codec@aa00000 {
+@@ -3948,6 +4086,7 @@
+ 		};
+ 
+ 		clock-controller@aaf0000 {
++			status = "disabled";
+ 			compatible = "qcom,sm8650-videocc";
+ 			reg = <0x00 0xaaf0000 0x00 0x10000>;
+ 			clocks = <0x44 0x4c 0xb8>;
+@@ -4091,6 +4230,7 @@
+ 		};
+ 
+ 		clock-controller@ade0000 {
++			status = "disabled";
+ 			compatible = "qcom,sm8650-camcc";
+ 			reg = <0x00 0xade0000 0x00 0x20000>;
+ 			clocks = <0x4c 0x05 0x44 0x45 0x46>;
+@@ -4380,6 +4520,7 @@
+ 		};
+ 
+ 		clock-controller@af00000 {
++			status = "disabled";
+ 			compatible = "qcom,sm8650-dispcc";
+ 			reg = <0x00 0xaf00000 0x00 0x20000>;
+ 			clocks = <0x44 0x45 0x4c 0x0e 0x46 0xe2 0x00 0xe2 0x01 0xe5 0x00 0xe5 0x01 0x4a 0x01 0x4a 0x02 0x00 0x00 0x00 0x00 0x00 0x00>;
+@@ -4475,7 +4616,7 @@
+ 					phandle = <0x119>;
+ 				};
+ 
+-				gpio@8800 {
++				pm8550_gpios: gpio@8800 {
+ 					compatible = "qcom,pm8550-gpio", "qcom,spmi-gpio";
+ 					reg = <0x8800>;
+ 					gpio-controller;
+@@ -4484,6 +4625,28 @@
+ 					interrupt-controller;
+ 					#interrupt-cells = <0x02>;
+ 					phandle = <0xea>;
++
++					fan-pwm-state {
++						pins = "gpio9";
++						function = "func1";
++						input-disable;
++						output-high;
++						output-enable;
++						bias-disable;
++						drive-push-pull;
++						power-source = <0x00>;
++						qcom,drive-strength = <0x03>;
++						phandle = <0x4601>;
++					};
++
++					key_vol_up_default: key-vol-up-default {
++						pins = "gpio6";
++						function = "normal";
++						input-enable;
++						bias-pull-up;
++						power-source = <0x01>;
++						phandle = <0x25a>;
++					};
+ 				};
+ 
+ 				led-controller@ee00 {
+@@ -4495,7 +4658,10 @@
+ 				pwm {
+ 					compatible = "qcom,pm8550-pwm", "qcom,pm8350c-pwm";
+ 					#pwm-cells = <0x02>;
+-					status = "disabled";
++					pinctrl-0 = <0x4601>;
++					pinctrl-names = "default";
++					status = "okay";
++					phandle = <0x4600>;
+ 				};
+ 			};
+ 
+@@ -4682,14 +4848,15 @@
+ 					pwrkey {
+ 						compatible = "qcom,pmk8350-pwrkey";
+ 						interrupts = <0x00 0x13 0x07 0x03>;
+-						linux,code = <0x74>;
+-						status = "disabled";
++						linux,code = <0x1c>;
++						status = "okay";
+ 					};
+ 
+ 					resin {
+ 						compatible = "qcom,pmk8350-resin";
+ 						interrupts = <0x00 0x13 0x06 0x03>;
+-						status = "disabled";
++						linux,code = <0x72>;
++						status = "okay";
+ 					};
+ 				};
+ 
+@@ -4722,7 +4889,19 @@
+ 					#gpio-cells = <0x02>;
+ 					interrupt-controller;
+ 					#interrupt-cells = <0x02>;
++					pinctrl-0 = <0x218>;
++					pinctrl-names = "default";
+ 					phandle = <0xf3>;
++
++					alt-sleep-clk-state {
++						pins = "gpio3";
++						function = "func1";
++						input-disable;
++						output-enable;
++						bias-disable;
++						power-source = <0x00>;
++						phandle = <0x218>;
++					};
+ 				};
+ 
+ 				pwm {
+@@ -4747,6 +4926,101 @@
+ 			wakeup-parent = <0xae>;
+ 			phandle = <0x99>;
+ 
++			ts-active-state {
++				pins = "gpio161", "gpio162";
++				function = "gpio";
++				drive-strength = <0x08>;
++				bias-pull-up;
++				phandle = <0x203>;
++			};
++
++			wcn-wlan-bt-active-state {
++				phandle = <0x216>;
++
++				wlan-en-pins {
++					pins = "gpio16";
++					function = "gpio";
++					drive-strength = <0x10>;
++					bias-pull-down;
++				};
++
++				bt-en-pins {
++					pins = "gpio17";
++					function = "gpio";
++					drive-strength = <0x10>;
++					bias-disable;
++				};
++
++				sw-ctrl-pins {
++					pins = "gpio18", "gpio19";
++					function = "gpio";
++					bias-pull-down;
++				};
++			};
++
++			fan-en-state {
++				pins = "gpio173";
++				function = "gpio";
++				drive-strength = <0x08>;
++				bias-disable;
++				output-low;
++				phandle = <0x4602>;
++			};
++
++			fan-tach-state {
++				pins = "gpio174";
++				function = "gpio";
++				drive-strength = <0x10>;
++				bias-pull-up;
++				input-enable;
++				phandle = <0x4603>;
++			};
++
++			pri-mi2s-active-state {
++				phandle = <0x254>;
++
++				sck-pins {
++					pins = "gpio126";
++					function = "i2s0_sck";
++					drive-strength = <0x08>;
++					bias-disable;
++					output-high;
++				};
++
++				sd0-pins {
++					pins = "gpio127";
++					function = "i2s0_data0";
++					drive-strength = <0x02>;
++					bias-pull-down;
++					input-enable;
++				};
++
++				sd1-pins {
++					pins = "gpio128";
++					function = "i2s0_data1";
++					drive-strength = <0x08>;
++					bias-disable;
++					output-low;
++				};
++
++				ws-pins {
++					pins = "gpio129";
++					function = "i2s0_ws";
++					drive-strength = <0x08>;
++					bias-disable;
++					output-high;
++				};
++			};
++
++			wcd-default-state {
++				pins = "gpio107";
++				function = "gpio";
++				drive-strength = <0x10>;
++				bias-disable;
++				output-low;
++				phandle = <0x255>;
++			};
++
+ 			cam0-default-state {
+ 				pins = "gpio100";
+ 				function = "cam_mclk";
+@@ -5156,6 +5430,7 @@
+ 			};
+ 
+ 			pcie0-default-state {
++				phandle = <0x215>;
+ 
+ 				perst-pins {
+ 					pins = "gpio94";
+@@ -6043,15 +6318,26 @@
+ 					regulator-allow-set-load;
+ 					phandle = <0x9a>;
+ 				};
++
++				ldo14 {
++					regulator-name = "vreg_l14b";
++					regulator-min-microvolt = <0x30d400>;
++					regulator-max-microvolt = <0x30d400>;
++					regulator-initial-mode = <0x03>;
++					regulator-allow-set-load;
++					phandle = <0x201>;
++				};
+ 			};
+ 
+ 			regulators-nx-c {
+ 				compatible = "qcom,pm8550vs-rpmh-regulators";
+ 				qcom,pmic-id = "c";
+ 				vdd-s1-supply = <0xff>;
++				vdd-s2-supply = <0xff>;
+ 				vdd-s3-supply = <0xff>;
+ 				vdd-s6-supply = <0xff>;
+ 				vdd-l1-supply = <0x103>;
++				vdd-l3-supply = <0x103>;
+ 
+ 				smps1 {
+ 					regulator-name = "vreg_s1c";
+@@ -6085,6 +6371,23 @@
+ 					regulator-allow-set-load;
+ 					phandle = <0x9b>;
+ 				};
++
++				smps2 {
++					regulator-name = "vreg_s2c";
++					regulator-min-microvolt = <0xee480>;
++					regulator-max-microvolt = <0xfcee0>;
++					regulator-initial-mode = <0x03>;
++					phandle = <0x211>;
++				};
++
++				ldo3 {
++					regulator-name = "vreg_l3c";
++					regulator-min-microvolt = <0x124f80>;
++					regulator-max-microvolt = <0x124f80>;
++					regulator-initial-mode = <0x03>;
++					regulator-allow-set-load;
++					phandle = <0x212>;
++				};
+ 			};
+ 
+ 			regulators-nx-d {
+@@ -6120,8 +6423,17 @@
+ 			regulators-nx-i {
+ 				compatible = "qcom,pm8550ve-rpmh-regulators";
+ 				qcom,pmic-id = "i";
++				vdd-s4-supply = <0xff>;
+ 				vdd-l1-supply = <0x104>;
+ 				vdd-l3-supply = <0x103>;
++
++				smps4 {
++					regulator-name = "vreg_s4i";
++					regulator-min-microvolt = <0xe57e0>;
++					regulator-max-microvolt = <0xf51e0>;
++					regulator-initial-mode = <0x03>;
++					phandle = <0x213>;
++				};
+ 
+ 				ldo1 {
+ 					regulator-name = "vreg_l1i";
+@@ -6139,6 +6451,22 @@
+ 					regulator-initial-mode = <0x03>;
+ 					regulator-allow-set-load;
+ 					phandle = <0x96>;
++				};
++			};
++
++			regulators-nx-k {
++				compatible = "qcom,pmr735d-rpmh-regulators";
++				qcom,pmic-id = "k";
++				vdd-l6-supply = <0x101>;
++
++				ldo6 {
++					regulator-name = "vreg_l6k";
++					regulator-min-microvolt = <0x1b7740>;
++					regulator-max-microvolt = <0x1c61a0>;
++					regulator-initial-mode = <0x03>;
++					regulator-always-on;
++					regulator-boot-on;
++					phandle = <0x214>;
+ 				};
+ 			};
+ 		};
+@@ -6407,9 +6735,74 @@
+ 		};
+ 
+ 		cpuss0-thermal {
++			polling-delay = <0x3e8>;
++			polling-delay-passive = <0xfa>;
+ 			thermal-sensors = <0x10d 0x01>;
+ 
++			cooling-maps {
++
++				fan-map0 {
++					trip = <0x4606>;
++					cooling-device = <0x4605 0x01 0x01>;
++				};
++
++				fan-map1 {
++					trip = <0x4607>;
++					cooling-device = <0x4605 0x02 0x02>;
++				};
++
++				fan-map2 {
++					trip = <0x4608>;
++					cooling-device = <0x4605 0x03 0x03>;
++				};
++
++				fan-map3 {
++					trip = <0x4609>;
++					cooling-device = <0x4605 0x04 0x04>;
++				};
++
++				fan-map4 {
++					trip = <0x460a>;
++					cooling-device = <0x4605 0x05 0x05>;
++				};
++			};
++
+ 			trips {
++
++				fan-trip0 {
++					temperature = <0xd6d8>;
++					hysteresis = <0x1388>;
++					type = "active";
++					phandle = <0x4606>;
++				};
++
++				fan-trip1 {
++					temperature = <0xfde8>;
++					hysteresis = <0x1388>;
++					type = "active";
++					phandle = <0x4607>;
++				};
++
++				fan-trip2 {
++					temperature = <0x124f8>;
++					hysteresis = <0x1388>;
++					type = "active";
++					phandle = <0x4608>;
++				};
++
++				fan-trip3 {
++					temperature = <0x14c08>;
++					hysteresis = <0x1388>;
++					type = "active";
++					phandle = <0x4609>;
++				};
++
++				fan-trip4 {
++					temperature = <0x16760>;
++					hysteresis = <0x1388>;
++					type = "active";
++					phandle = <0x460a>;
++				};
+ 
+ 				cpuss0-hot {
+ 					temperature = <0x1adb0>;
+@@ -7413,6 +7806,32 @@
+ 		nvmem-cell-names = "reboot-mode";
+ 		mode-recovery = <0x01>;
+ 		mode-bootloader = <0x02>;
++	};
++
++	fan-pwr-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "vreg_fan_pwr";
++		regulator-min-microvolt = <0x4c4b40>;
++		regulator-max-microvolt = <0x4c4b40>;
++		gpio = <0x99 0xad 0x00>;
++		enable-active-high;
++		startup-delay-us = <0x186a0>;
++		pinctrl-0 = <0x4602>;
++		pinctrl-names = "default";
++		phandle = <0x4604>;
++	};
++
++	pwm-fan {
++		compatible = "pwm-fan";
++		pwms = <0x4600 0x03 0x9c40>;
++		fan-supply = <0x4604>;
++		interrupts-extended = <0x99 0xae 0x02>;
++		pulses-per-revolution = <0x03>;
++		pinctrl-0 = <0x4603>;
++		pinctrl-names = "default";
++		#cooling-cells = <0x02>;
++		cooling-levels = <0x00 0x33 0x66 0x99 0xcc 0xff>;
++		phandle = <0x4605>;
+ 	};
+ 
+ 	vph-pwr-regulator {
+@@ -7424,4 +7843,119 @@
+ 		regulator-boot-on;
+ 		phandle = <0xff>;
+ 	};
++
++	pmic-glink {
++		compatible = "qcom,sm8650-pmic-glink", "qcom,pmic-glink";
++	};
++
++	spdif-out {
++		compatible = "linux,spdif-dit";
++		#sound-dai-cells = <0x00>;
++		phandle = <0x250>;
++	};
++
++	wcd939x-codec {
++		compatible = "qcom,wcd9395-codec", "qcom,wcd9390-codec";
++		pinctrl-names = "default";
++		pinctrl-0 = <0x255>;
++		reset-gpios = <0x99 0x6b 0x01>;
++		vdd-rxtx-supply = <0xec>;
++		vdd-io-supply = <0xec>;
++		vdd-buck-supply = <0xec>;
++		vdd-px-supply = <0x212>;
++		vdd-mic-bias-supply = <0x100>;
++		qcom,micbias1-microvolt = <0x2625a0>;
++		qcom,micbias2-microvolt = <0x2932e0>;
++		qcom,micbias3-microvolt = <0x2625a0>;
++		qcom,micbias4-microvolt = <0x2625a0>;
++		qcom,mbhc-buttons-vthreshold-microvolt = <0x124f8 0x249f0 0x39dc8 0x7a120 0x7a120 0x7a120 0x7a120 0x7a120>;
++		qcom,mbhc-headset-vthreshold-microvolt = <0x19f0a0>;
++		qcom,mbhc-headphone-vthreshold-microvolt = <0xc350>;
++		qcom,ground-jack-type-normally-closed;
++		qcom,rx-device = <0x251>;
++		qcom,tx-device = <0x252>;
++		#sound-dai-cells = <0x01>;
++		phandle = <0x253>;
++	};
++
++	sound {
++		compatible = "qcom,sm8650-sndcard", "qcom,sm8450-sndcard";
++		model = "SM8650-Nubia-NX769J";
++		pinctrl-names = "default";
++		pinctrl-0 = <0x254>;
++		audio-routing = "IN1_HPHL", "HPHL_OUT",
++		                "IN2_HPHR", "HPHR_OUT",
++		                "AMIC1", "MIC BIAS1",
++		                "AMIC2", "MIC BIAS2",
++		                "AMIC3", "MIC BIAS3",
++		                "AMIC4", "MIC BIAS3",
++		                "AMIC5", "MIC BIAS4",
++		                "TX SWR_INPUT0", "ADC1_OUTPUT",
++		                "TX SWR_INPUT1", "ADC2_OUTPUT",
++		                "TX SWR_INPUT2", "ADC3_OUTPUT",
++		                "TX SWR_INPUT3", "ADC4_OUTPUT";
++
++		primary-mi2s-playback-dai-link {
++			link-name = "Primary MI2S Playback";
++
++			cpu {
++				sound-dai = <0x257 0x10>;
++			};
++
++			codec {
++				sound-dai = <0x250>;
++			};
++
++			platform {
++				sound-dai = <0x256>;
++			};
++		};
++
++		wcd-playback-dai-link {
++			link-name = "WCD Playback";
++
++			cpu {
++				sound-dai = <0x257 0x71>;
++			};
++
++			codec {
++				sound-dai = <0x253 0x00 0x258 0x00 0xb8 0x00>;
++			};
++
++			platform {
++				sound-dai = <0x256>;
++			};
++		};
++
++		wcd-capture-dai-link {
++			link-name = "WCD Capture";
++
++			cpu {
++				sound-dai = <0x257 0x78>;
++			};
++
++			codec {
++				sound-dai = <0x253 0x01 0x259 0x00 0xbc 0x00>;
++			};
++
++			platform {
++				sound-dai = <0x256>;
++			};
++		};
++	};
++
++	gpio-keys {
++		compatible = "gpio-keys-polled";
++		poll-interval = <0x14>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&key_vol_up_default>;
++
++		vol-up {
++			label = "volume_up";
++			gpios = <&pm8550_gpios 0x06 0x01>;
++			linux,input-type = <0x01>;
++			linux,code = <0x73>;
++			debounce-interval = <0x0f>;
++		};
++	};
+ };

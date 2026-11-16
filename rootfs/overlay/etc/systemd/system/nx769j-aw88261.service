@@ -1,0 +1,20 @@
+[Unit]
+Description=Nubia RedMagic 9 Pro (NX769J) Dual AW88261 SmartPA Controller Daemon (Zero-CPU ALSA Timer Event Mode)
+After=systemd-modules-load.service sound.target
+Wants=sound.target
+
+[Service]
+Type=simple
+RuntimeDirectory=nx769j-smartpa
+RuntimeDirectoryMode=0777
+ExecStartPre=/usr/bin/modprobe -q i2c-dev
+ExecStartPre=/usr/bin/modprobe -q snd-timer
+ExecStart=/usr/local/sbin/aw88261-init daemon --mode-file /run/nx769j-smartpa/mode --pcm-dev 1
+ExecStopPost=/usr/local/sbin/aw88261-init off
+# Belt-and-suspenders cgroup fuse (normal steady-state CPU is strictly 0.00%)
+CPUQuota=10%
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

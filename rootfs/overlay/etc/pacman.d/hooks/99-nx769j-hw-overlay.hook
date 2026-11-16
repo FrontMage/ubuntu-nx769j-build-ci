@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = alsa-ucm-conf
+
+[Action]
+Description = Restoring NX769J SM8650 ALSA UCM2 speaker/mic profile overlay...
+When = PostTransaction
+Exec = /bin/sh -c 'if [ -d /usr/local/share/nx769j-hw-overlay/ucm2 ]; then cp -af /usr/local/share/nx769j-hw-overlay/ucm2/. /usr/share/alsa/ucm2/; fi'

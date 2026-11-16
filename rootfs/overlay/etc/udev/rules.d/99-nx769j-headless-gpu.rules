@@ -1,0 +1,5 @@
+# Adreno 750 runs in headless render-only mode (msm.separate_gpu_kms=1, DRIVER_MODESET=0).
+# Keep non-KMS card0 root-only (0600 root:root, no uaccess ACL) so compositors/Vulkan never query KMS planes on card0,
+# while renderD128 (0660 root:render + uaccess) provides full Turnip Vulkan 1.4 + Zink OpenGL 4.6 access.
+SUBSYSTEM=="drm", KERNEL=="card[0-9]*", ATTRS{of_node/compatible}=="*adreno*", OWNER="root", GROUP="root", MODE="0600", TAG-="uaccess"
+SUBSYSTEM=="drm", KERNEL=="renderD*", OWNER="root", GROUP="render", MODE="0660", TAG+="uaccess"

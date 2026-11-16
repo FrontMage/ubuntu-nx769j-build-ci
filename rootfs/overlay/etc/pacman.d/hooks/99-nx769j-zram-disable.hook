@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: MIT
+# Keep zram-generator disabled on NX769J (kernel 7.1.1-nx769j+ uses 4G UFS /swapfile, no zram.ko)
+# so dev-zram0.device never stalls boot for 90s after package upgrades.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = zram-generator
+Target = omarchy-*
+Target = omamobile-*
+
+[Action]
+Description = Masking systemd zram-generator on NX769J (using 4G UFS /swapfile)...
+When = PostTransaction
+Exec = /usr/bin/sh -c 'mkdir -p /etc/systemd/system-generators && ln -sfn /dev/null /etc/systemd/system-generators/zram-generator && printf "# disabled on NX769J; using 4G UFS /swapfile\n" > /etc/systemd/zram-generator.conf'

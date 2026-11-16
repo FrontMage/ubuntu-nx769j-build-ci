@@ -1,0 +1,7 @@
+# RedMagic 9 Pro (NX769J): 6.8" 1116x2480 flat AMOLED (432x960 logical @ 31/12).
+# Under-display selfie camera has zero punch-hole cutout; 48 px bar = 7.9 mm.
+[bar]
+size-horizontal = 48
+
+[radius]
+huge = 16

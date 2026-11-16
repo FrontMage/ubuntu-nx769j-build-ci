@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""NX769J Omarchy Mobile rotation-lock bridge.
+
+Replaces omamobile-autorotate's Hyprland output-transform loop on NX769J
+because nx769j-fb-wl already performs zero-tear 32x32-tiled physical framebuffer
+and 10-slot touch rotation (1116x2480 <-> 2480x1116). Keeping this daemon as
+omamobile-autorotate.service's ExecStart makes QuickSettings' Rotation lock
+tile (which checks ~/.local/state/omamobile/rotation-lock and
+`systemctl --user is-active omamobile-autorotate.service`) control
+nx769j-fb-wl's ROTATE lock / ROTATE auto state directly with zero double-rotation.
+"""
+import os
+import signal
+import socket
+import sys
+import time
+
+POWER_SOCK = os.environ.get("NX769J_FB_POWER_SOCK", "/run/nx769j-wl/power.sock")
+LOCK_FILE = os.path.join(
+    os.environ.get("HOME", "/home/developer"),
+    ".local/state/omamobile/rotation-lock",
+)
+
+STOP = False
+
+
+def _on_sig(_signum, _frame):
+    global STOP
+    STOP = True
+
+
+def send_rot(mode: str) -> bool:
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1.0)
+            s.connect(POWER_SOCK)
+            s.sendall(f"ROTATE {mode}\n".encode("utf-8"))
+            s.recv(256)
+        return True
+    except OSError:
+        return False
+
+
+def main() -> int:
+    signal.signal(signal.SIGTERM, _on_sig)
+    signal.signal(signal.SIGINT, _on_sig)
+
+    last_locked = None
+    while not STOP:
+        locked = os.path.exists(LOCK_FILE)
+        if locked != last_locked:
+            if send_rot("lock" if locked else "auto"):
+                last_locked = locked
+        time.sleep(0.4)
+
+    # If the user stops omamobile-autorotate.service explicitly, lock rotation.
+    send_rot("lock")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

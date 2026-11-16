@@ -1,0 +1,12 @@
+[Unit]
+Description=Nubia RedMagic 9 Pro (NX769J) Smart Battery Charge-Control Threshold Setup
+After=systemd-modules-load.service
+Wants=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/nx769j-charge-limit apply --wait-sec 45
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=NX769J 6-Axis IMU Daemon (ADSP QSH service 400 -> CUSE evdev & state socket)
+After=systemd-udevd.service hexagonrpcd.service hexagonrpcd-rootpd.service
+Wants=hexagonrpcd.service hexagonrpcd-rootpd.service
+Before=shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=simple
+ExecStartPre=-/usr/bin/modprobe qrtr
+ExecStartPre=-/usr/bin/modprobe cuse
+ExecStart=/usr/local/sbin/nx769j-imu-daemon -r 50
+Restart=always
+RestartSec=1s
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target

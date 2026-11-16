@@ -1,0 +1,15 @@
+[Unit]
+Description=NX769J SM8650 ADSP AudioReach Readiness & Card Bring-Up
+DefaultDependencies=no
+After=systemd-udevd.service systemd-modules-load.service hexagonrpcd-rootpd.service
+Wants=hexagonrpcd-rootpd.service
+Before=sound.target nx769j-aw88261.service alsa-restore.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/nx769j-audio-ready
+TimeoutStartSec=45
+
+[Install]
+WantedBy=multi-user.target sound.target

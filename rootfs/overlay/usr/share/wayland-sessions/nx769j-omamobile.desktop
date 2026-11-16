@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Omarchy Mobile (NX769J Adreno 750)
+Comment=Omarchy Mobile Hyprland nested on nx769j-fb-wl with Freedreno FD750 GPU acceleration
+Exec=/usr/local/bin/nx769j-hyprland-nested
+Type=Application
+DesktopNames=Hyprland
+Keywords=tiling;wayland;compositor;mobile;

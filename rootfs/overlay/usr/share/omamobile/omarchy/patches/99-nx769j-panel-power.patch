@@ -1,0 +1,41 @@
+# NX769J AMOLED framebuffer bridge: recognize nested WAYLAND-1 output as the
+# internal panel, expose nx769j_amoled when /run/nx769j-wl/power.sock is active,
+# and forward DPMS off/on panel_power hooks to nx769j-fb-wl power.sock.
+
+diff -ruN a/bin/omarchy-brightness-display b/bin/omarchy-brightness-display
+--- i/bin/omarchy-brightness-display	2026-11-15 19:54:14
++++ w/bin/omarchy-brightness-display	2026-11-15 19:54:14
+@@ -32,7 +32,7 @@
+ [[ -n $monitor ]] || monitor="$(omarchy-hyprland-monitor-focused 2>/dev/null || true)"
+ 
+ monitor_is_internal() {
+-  [[ $monitor =~ ^(eDP|LVDS|DSI)- ]]
++  [[ $monitor =~ ^(eDP|LVDS|DSI|WAYLAND)- ]]
+ }
+ 
+ use_apple_display() {
+@@ -86,7 +86,11 @@
+ # off, 0 is on). Phones on a bootloader framebuffer need it: DPMS there doesn't
+ # reach the panel. Only where the device lets this user write bl_power.
+ panel_power() {
+-  local device bl
++  local device bl sock="${NX769J_FB_POWER_SOCK:-/run/nx769j-wl/power.sock}"
++  if [[ -S $sock ]]; then
++    python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout(1.0); s.connect(sys.argv[1]); s.sendall((sys.argv[2]+"\n").encode()); s.recv(128); s.close()' "$sock" "$([[ $1 == 0 ]] && echo ON || echo OFF)" 2>/dev/null || true
++    return 0
++  fi
+   device="$(omarchy-hw-display 2>/dev/null)" || return 0
+   bl="${OMARCHY_BACKLIGHT_PATH:-/sys/class/backlight}/$device/bl_power"
+   [[ -w $bl ]] && echo "$1" >"$bl" 2>/dev/null
+diff -ruN a/bin/omarchy-hw-display b/bin/omarchy-hw-display
+--- i/bin/omarchy-hw-display	2026-11-15 19:54:14
++++ w/bin/omarchy-hw-display	2026-11-15 19:54:14
+@@ -54,6 +54,8 @@
+ 
+ if [[ -n $device ]]; then
+   printf '%s\n' "$device"
++elif [[ -S ${NX769J_FB_POWER_SOCK:-/run/nx769j-wl/power.sock} ]]; then
++  printf 'nx769j_amoled\n'
+ else
+   exit 1
+ fi

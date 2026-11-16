@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# Wait for nx769j-fb-wl's Wayland socket & Adreno 750 renderD128 node, keeping
+# outer WAYLAND_DISPLAY unset in uwsm/systemd --user so Hyprland's inner
+# WAYLAND_DISPLAY=wayland-1 becomes the sole session display for all clients.
+set -euo pipefail
+
+WL_SOCK="${NX769J_WL_SOCKET:-/run/nx769j-wl/wayland-fb0}"
+for _ in $(seq 1 150); do
+  [[ -S "$WL_SOCK" ]] && break
+  sleep 0.1
+done
+
+if [[ ! -S "$WL_SOCK" ]]; then
+  echo "nx769j-start-omamobile: timed out waiting for $WL_SOCK" >&2
+  exit 1
+fi
+
+for _ in $(seq 1 50); do
+  [[ -e /dev/dri/renderD128 ]] && break
+  sleep 0.1
+done
+
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:${PATH:-}"
+unset WAYLAND_DISPLAY
+exec /usr/bin/uwsm start -e -D Hyprland nx769j-omamobile.desktop

@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omamobile-shell
+
+[Action]
+Description = Re-applying NX769J always-visible QuickSettings Volume Slider...
+When = PostTransaction
+Exec = /usr/bin/python3 /usr/local/share/nx769j-audio-ui/apply-audio-ui.py --root /

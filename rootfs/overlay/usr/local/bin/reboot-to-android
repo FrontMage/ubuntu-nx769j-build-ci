@@ -1,0 +1,48 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Switch UFS active boot slot to Slot _b (stock Android) and reboot.
+set -eu
+
+DRY_RUN=0
+NO_REBOOT=0
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)   DRY_RUN=1 ;;
+    --no-reboot) NO_REBOOT=1 ;;
+    -h|--help)
+      echo "Usage: reboot-to-android [--dry-run] [--no-reboot]"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      exit 1
+      ;;
+  esac
+done
+
+SLOTCTL="/usr/local/sbin/nx769j-slotctl"
+if [ ! -x "$SLOTCTL" ]; then
+  echo "ERROR: Missing $SLOTCTL (build from storage-dualboot/nx769j_slotctl.c)" >&2
+  exit 1
+fi
+
+if [ "$DRY_RUN" = "1" ]; then
+  "$SLOTCTL" status
+  exit 0
+fi
+
+echo "[reboot-to-android] Setting active UFS slot to _b (Android)..."
+"$SLOTCTL" set-active b
+sync
+
+if [ "$NO_REBOOT" = "1" ]; then
+  echo "[reboot-to-android] Slot _b is now active (--no-reboot)."
+  exit 0
+fi
+
+echo "[reboot-to-android] Rebooting into Android..."
+if command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl reboot || systemctl reboot || reboot
+else
+  reboot
+fi

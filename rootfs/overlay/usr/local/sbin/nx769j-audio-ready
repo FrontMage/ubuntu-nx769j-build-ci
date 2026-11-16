@@ -1,0 +1,102 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# nx769j-audio-ready — Order SM8650 Q6APM / AudioReach card probe AFTER ADSP SPF
+# readiness (eliminating early-boot `CMD timeout for [1001021] opcode`) and initialize
+# clean ALSA UCM HiFi Speaker routing + Q13 unity gain (8192 = 0.0 dB).
+# SAFETY: Never calls rmmod or unbinds q6apm-dai / snd-soc-sc8280xp.
+set -eu
+
+log() {
+  echo "[nx769j-audio-ready] $*"
+}
+
+adsp_state() {
+  for r in /sys/class/remoteproc/remoteproc*; do
+    [ -r "$r/name" ] || continue
+    if [ "$(cat "$r/name" 2>/dev/null || true)" = "adsp" ]; then
+      cat "$r/state" 2>/dev/null || true
+      return 0
+    fi
+  done
+  echo "missing"
+}
+
+# 1. Wait up to 20s for SM8650 ADSP remoteproc to reach 'running'
+for _ in $(seq 1 80); do
+  [ "$(adsp_state)" = "running" ] && break
+  sleep 0.25
+done
+
+# 2. Wait up to 15s for BOTH gprsvc:service:2:1 (apm) AND gprsvc:service:2:2 (prm).
+#    Live dmesg proves service:2:1 registers at ~1.4s BEFORE ADSP audio_pd finishes
+#    initializing, whereas service:2:2 registers at ~6.6s once SPF is ready to answer
+#    APM_CMD_GET_SPF_STATE (0x01001021) without timing out.
+for _ in $(seq 1 60); do
+  if [ -e /sys/bus/apr/devices/gprsvc:service:2:1 ] && [ -e /sys/bus/apr/devices/gprsvc:service:2:2 ]; then
+    break
+  fi
+  sleep 0.25
+done
+sleep 0.2
+
+# 3. Load non-GPR prerequisites + Q6APM/SC8280XP AudioReach modules idempotently
+for mod in \
+  i2c-dev \
+  i2c-qcom-geni \
+  soundwire-qcom \
+  snd-soc-wcd939x-sdw \
+  snd-soc-wcd939x \
+  snd-soc-lpass-va-macro \
+  snd-soc-lpass-rx-macro \
+  snd-soc-lpass-tx-macro \
+  snd-soc-spdif-tx \
+  gpio_keys_polled \
+  snd-q6dsp-common \
+  snd-q6apm \
+  q6prm \
+  q6prm-clocks \
+  q6apm-lpass-dais \
+  q6apm-dai \
+  snd-soc-qcom-common \
+  snd-soc-qcom-sdw \
+  snd-soc-sc8280xp
+do
+  modprobe "$mod" 2>/dev/null || true
+done
+
+# 4. Wait up to 10s for ALSA card0 (SM8650-Nubia-NX769J)
+for _ in $(seq 1 40); do
+  if [ -r /proc/asound/cards ] && grep -q "SM8650" /proc/asound/cards 2>/dev/null; then
+    break
+  fi
+  sleep 0.25
+done
+
+# 5. Ensure SmartPA default mode file (world-writable 0777/0666 so uid=1000 WirePlumber
+#    HiFi.conf `aw88261-init set-mode speaker` atomic rename never hits EACCES!) & clean
+#    UCM HiFi Speaker route + Q13 unity gain (8192 = 0.0 dB)
+mkdir -p /run/nx769j-smartpa
+chmod 0777 /run/nx769j-smartpa
+if [ ! -s /run/nx769j-smartpa/mode ]; then
+  printf 'speaker\n' > /run/nx769j-smartpa/mode
+fi
+chmod 0666 /run/nx769j-smartpa/mode 2>/dev/null || true
+
+if [ -r /proc/asound/cards ] && grep -q "SM8650" /proc/asound/cards 2>/dev/null; then
+  if command -v alsaucm >/dev/null 2>&1; then
+    alsaucm -c hw:0 set _verb HiFi set _enadev Speaker 2>/dev/null || true
+  fi
+  if command -v amixer >/dev/null 2>&1; then
+    amixer -q -c 0 cset name='PRIMARY_MI2S_RX Audio Mixer MultiMedia2' 1 2>/dev/null || true
+    amixer -q -c 0 cset name='stream1.vol_ctrl1 MultiMedia2 Playback Volu' 8192 2>/dev/null || true
+    amixer -q -c 0 cset name='stream0.vol_ctrl0 MultiMedia1 Playback Volu' 8192 2>/dev/null || true
+  fi
+  log "SM8650-Nubia-NX769J audio card ready (HiFi Speaker route + Q13 unity 8192)"
+else
+  log "WARNING: SM8650 ALSA card did not appear within timeout"
+fi
+
+mkdir -p /run
+printf 'ready\n' > /run/nx769j-audio-ready
+chmod 0644 /run/nx769j-audio-ready
+exit 0

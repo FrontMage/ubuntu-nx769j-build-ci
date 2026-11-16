@@ -1,0 +1,13 @@
+[Unit]
+Description=NX769J Built-in Turbo Cooling Fan Init (pwm1_enable=3 + Thermal Auto)
+After=systemd-modules-load.service systemd-udevd.service
+Wants=systemd-modules-load.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sh -c 'if [ ! -x /usr/local/bin/nx769j-fan ] || [ /usr/local/src/nx769j-fan.c -nt /usr/local/bin/nx769j-fan ]; then /usr/bin/gcc -std=c11 -O2 -Wall -Wextra /usr/local/src/nx769j-fan.c -o /usr/local/bin/nx769j-fan.new && mv -f /usr/local/bin/nx769j-fan.new /usr/local/bin/nx769j-fan && chmod 0755 /usr/local/bin/nx769j-fan; fi'
+ExecStart=/usr/local/bin/nx769j-fan init
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+# Re-apply NX769J Zero-Cutout Top Bar (running apps + SystemTray + 1-tap Switcher)
+# and flat-screen touch gesture tuning after omamobile-shell installs or upgrades.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omamobile-shell
+Target = omamobile-shell-git
+
+[Action]
+Description = Applying NX769J Zero-Cutout Top Bar and touch gesture overlay...
+When = PostTransaction
+Exec = /usr/local/sbin/nx769j-apply-omamobile-ui --hook

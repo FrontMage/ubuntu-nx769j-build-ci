@@ -1,0 +1,16 @@
+[Unit]
+Description=NX769J Framebuffer Wayland Compositor Bridge (DMA-BUF + 10-slot Touch + Keyboard + AMOLED)
+After=systemd-udevd.service nx769j-imu-daemon.service
+Wants=nx769j-imu-daemon.service
+
+[Service]
+Type=simple
+RuntimeDirectory=nx769j-wl
+RuntimeDirectoryMode=0755
+ExecStartPre=/bin/sh -c 'if [ ! -x /usr/local/bin/nx769j-fb-wl ] || [ /usr/local/src/nx769j_fb_wl.c -nt /usr/local/bin/nx769j-fb-wl ]; then /usr/bin/gcc -O3 /usr/local/src/nx769j_fb_wl.c -o /usr/local/bin/nx769j-fb-wl; fi'
+ExecStart=/usr/local/bin/nx769j-fb-wl /run/nx769j-wl/wayland-fb0
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target
